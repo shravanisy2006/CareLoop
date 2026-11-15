@@ -10,6 +10,19 @@ pythonpath = ["."]
 addopts = "-q"
 filterwarnings = ["error::DeprecationWarning:careloop.*"]
 
+[tool.coverage.run]
+source = ["careloop"]
+branch = true
+# The Firestore backend is exercised only by the repository contract tests, which need the
+# Firestore emulator (FIRESTORE_EMULATOR_HOST). Without it they are skipped, so it is left out of
+# the gate instead of dragging the number down silently. See TESTING.md.
+omit = ["careloop/storage/firestore_repository.py"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

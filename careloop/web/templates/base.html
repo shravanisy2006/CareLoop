@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CareLoop{% endblock %} - CareLoop</title>
-  <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='careloop.css') }}">
+  <link rel="icon" href="{{ asset_url(request, 'favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ asset_url(request, 'careloop.css') }}">
 </head>
 <body{% if viewer and viewer.member.role == Role.ELDER %} class="elder-view"{% endif %}>
   <a class="skip-link" href="#main">Skip to main content</a>

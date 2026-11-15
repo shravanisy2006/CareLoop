@@ -17,6 +17,7 @@
 </div>
 {% endif %}
 {% if notifications %}
+<div class="table-scroll" role="region" aria-label="Emails sent" tabindex="0">
 <table class="data-table">
   <caption class="visually-hidden">Emails, newest first</caption>
   <thead><tr><th scope="col">Queued</th><th scope="col">Type</th><th scope="col">To</th><th scope="col">Result</th><th scope="col">Attempts</th></tr></thead>
@@ -33,5 +34,6 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}<p>No emails yet.</p>{% endif %}
 {% endblock %}

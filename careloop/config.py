@@ -56,6 +56,7 @@ class Settings:
     demo_mode: bool = False
     max_email_attempts: int = 3
     session_max_age_seconds: int = 8 * 60 * 60
+    sign_in_attempts_per_window: int = 30  # per network address, see web/rate_limit.py
 
     @property
     def email_configured(self) -> bool:
@@ -94,4 +95,7 @@ def load_settings(env_file: Path | None = Path(".env")) -> Settings:
         cycle_seconds=max(MIN_CYCLE_SECONDS, int(os.environ.get("CARELOOP_CYCLE_SECONDS", "60"))),
         default_timezone=os.environ.get("CARELOOP_DEFAULT_TIMEZONE", "Asia/Kolkata"),
         demo_mode=_flag("CARELOOP_DEMO_MODE", default=False),
+        sign_in_attempts_per_window=max(
+            1, int(os.environ.get("CARELOOP_SIGN_IN_ATTEMPTS_PER_15_MIN", "30"))
+        ),
     )

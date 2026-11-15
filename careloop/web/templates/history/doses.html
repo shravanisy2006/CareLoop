@@ -24,7 +24,8 @@
 <section aria-labelledby="list-title">
   <h2 id="list-title">Every dose</h2>
   {% if doses %}
-  <table class="data-table">
+  <div class="table-scroll" role="region" aria-label="Dose history" tabindex="0">
+<table class="data-table">
     <caption class="visually-hidden">Doses in the last {{ days }} days, newest first</caption>
     <thead><tr><th scope="col">Scheduled</th><th scope="col">Medicine</th><th scope="col">Result</th><th scope="col">Recorded by</th></tr></thead>
     <tbody>
@@ -40,6 +41,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p>No doses in this period.</p>{% endif %}
 </section>
 {% endblock %}

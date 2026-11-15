@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   test:
+    name: Lint, types and tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,7 +24,43 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check . && ruff format --check .
-      - name: Type check (mypy)
+      - name: Type check (mypy --strict)
         run: mypy
-      - name: Tests with coverage
-        run: python -m pytest --cov=careloop --cov-report=term-missing
+      - name: Tests with branch coverage (fails under 90%)
+        run: python -m pytest --cov --cov-report=term-missing
+
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.7"
+      - name: Audit runtime dependencies for known vulnerabilities
+        run: pip-audit -r requirements.txt --strict
+
+  accessibility:
+    name: Accessibility (axe-core, WCAG 2.2 AA)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt "playwright>=1.45"
+          npm install --no-save axe-core@4
+          python -m playwright install --with-deps chromium
+      - name: Audit every page as every role (fails on any violation)
+        run: >
+          python scripts/accessibility_audit.py
+          --axe node_modules/axe-core/axe.min.js --chrome-channel ""

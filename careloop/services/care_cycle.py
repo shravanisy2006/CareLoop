@@ -86,8 +86,15 @@ class CareCycle:
     def _run(self) -> CycleReport:
         repo, now = self._ctx.repo, self._ctx.clock.now()
         report = CycleReport()
+        # The cycle visits every circle, so reading the whole (small) circles table is intended.
         circles = {c.id: c for c in repo.list_circles()}
-        members: dict[str, list[Member]] = {cid: repo.list_members(cid) for cid in circles}
+        members_cache: dict[str, list[Member]] = {}
+
+        def members(circle_id: str) -> list[Member]:
+            # Loaded only for circles that actually have a dose or appointment to act on.
+            if circle_id not in members_cache:
+                members_cache[circle_id] = repo.list_members(circle_id)
+            return members_cache[circle_id]
 
         for circle in circles.values():
             report.doses_created += self._doses.generate_for_circle(circle, now)
@@ -95,7 +102,7 @@ class CareCycle:
         for dose in repo.list_open_doses_due_by(now):
             dose_circle = circles.get(dose.circle_id)
             if dose_circle is not None:
-                self._escalate(dose_circle, dose, members[dose_circle.id], report, now)
+                self._escalate(dose_circle, dose, members(dose_circle.id), report, now)
 
         for appointment in repo.list_appointments_starting_between(
             now, now + APPOINTMENT_REMINDER_LEAD
@@ -107,7 +114,7 @@ class CareCycle:
                 appointment_notifications(
                     visit_circle,
                     appointment,
-                    members[visit_circle.id],
+                    members(visit_circle.id),
                     self._ctx.settings.public_url,
                     now,
                 )

@@ -27,3 +27,8 @@ firebase-debug.log
 .vscode/
 .idea/
 .mypy_cache/
+.hypothesis/
+.coverage.*
+
+# Local transfer folder, never part of the project
+Claude outputs/

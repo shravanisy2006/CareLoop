@@ -255,3 +255,14 @@ def test_controls_are_large_enough_to_tap():
     sizes = [int(px) for px in re.findall(r"min-height:\s*(\d+)px", css)]
     assert sizes and min(sizes) >= 48  # WCAG 2.5.5 target size (enhanced) is 44px
     assert "--font-size-base: 1.25rem" in css  # 20px body text
+
+
+def test_every_table_is_in_a_named_keyboard_scrollable_region():
+    """Wide tables must scroll inside their own region, never make the page scroll (WCAG 1.4.10)."""
+    templates = Path(__file__).resolve().parents[2] / "careloop" / "web" / "templates"
+    wrapper = re.compile(
+        r'<div class="table-scroll" role="region" aria-label="[^"]+" tabindex="0">\s*<table'
+    )
+    for template in templates.rglob("*.html"):
+        text = template.read_text(encoding="utf-8")
+        assert text.count("<table") == len(wrapper.findall(text)), template.name

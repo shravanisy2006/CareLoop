@@ -89,9 +89,45 @@ banner. The one-click demo sign-in route is only registered in demo mode (it ret
 otherwise, `test_demo_features_do_not_exist_when_demo_mode_is_off`) and still goes through the
 normal passcode check and lockout.
 
+## Rate limiting and transport
+
+* Each person is locked out for 15 minutes after 5 wrong passcodes (`AuthService`).
+* On top of that, each network address may make at most 30 sign-in or sign-up attempts per 15
+  minutes across all names and circles (`web/rate_limit.py`, configurable with
+  `CARELOOP_SIGN_IN_ATTEMPTS_PER_15_MIN`), so circle code and name pairs cannot be sprayed. The
+  limiter's memory is bounded. Viewing the sign-in page is never limited.
+* Over HTTPS every response carries `Strict-Transport-Security`; pages are `Cache-Control:
+  no-store` because they contain health information. Only static files are cached.
+
+## Supply chain
+
+* `pip-audit` checks runtime dependencies for known vulnerabilities on every push (CI job
+  `security`); the last local run found none.
+* GitHub CodeQL (`security-and-quality` queries) analyses the Python code on every push to `main`,
+  every pull request and weekly.
+* Dependabot opens weekly pull requests for outdated Python packages and GitHub Actions.
+* ruff's bandit (`S`) rules run as part of linting.
+
+## Threat model
+
+| Threat | What an attacker might try | Mitigation | Verified by |
+|---|---|---|---|
+| Guessing a passcode | Many passcodes for one person | scrypt hashing, 5-try lockout, generic error | `test_auth.py`, `test_failed_login_does_not_reveal_which_part_was_wrong` |
+| Spraying accounts | One passcode across many names/circles | Per-address rate limit | `test_sign_in_is_rate_limited_per_address_across_all_names` |
+| Helper takes control | A caretaker changes medicines or approves their own request | Helpers can only propose; server-side role checks; nobody approves their own suggestion | `test_only_the_elder_can_decide`, `test_trusted_helper_cannot_approve_their_own_suggestion` |
+| Reading another circle | Guessing ids in URLs | Every lookup is scoped to the signed-in member's circle | `test_records_of_another_circle_are_not_visible` |
+| Cross-site request forgery | A malicious page submits a form | CSRF token on every POST, SameSite cookies | `test_posts_without_a_valid_csrf_token_are_refused`, `test_login_form_itself_requires_csrf` |
+| Script injection | Medicine names with HTML or script | Autoescaping, CSP `script-src 'none'` | `test_user_input_is_html_escaped`, `test_security_headers_and_cookie_flags` |
+| Session theft or fixation | Reusing an old session cookie | Signed HttpOnly cookies, new session on sign-in, HSTS over HTTPS | `test_session_is_replaced_on_sign_in`, `test_hsts_is_sent_only_over_https` |
+| Tampering with history | Editing or deleting audit entries | Append-only audit table enforced by database triggers | `test_audit_log_is_append_only_in_sqlite` |
+| Lost update | Two people change one medicine at once | Optimistic concurrency (version check in one transaction) | `test_versioned_update_rejects_stale_writes_atomically`, `test_stale_proposal_is_refused_after_record_changed` |
+| Leaking health data | Logs, caches or error pages | No health data or secrets in logs; `no-store` pages; generic error pages | `test_logs_never_contain_health_data_or_passcodes`, `test_malformed_input_gets_a_friendly_error_not_a_stack_trace` |
+| Vulnerable dependency | A known CVE in a library | pip-audit in CI, Dependabot | CI `security` job |
+
 ## Known gaps
 
-* No rate limiting per IP address; lockout is per member.
+* The rate limiter keeps its counts in memory, so with several server processes each enforces
+  its own limit, and counts reset on restart.
 * The circle code plus a member's name identifies the account; the code should be shared only with
   the circle.
 * No multi-factor authentication or self-service passcode reset.

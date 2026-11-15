@@ -182,3 +182,74 @@ def test_nobody_decides_on_their_own_suggestion():
     )
     with pytest.raises(PermissionDenied):
         authorize_decision(ravi, _circle("r"), own)
+
+
+def test_every_medication_field_change_is_described():
+    new = MedicationDetails(
+        "Glycomet", "2 tablets", "", ("08:00", "20:00"), date(2026, 11, 2), date(2026, 12, 1)
+    )
+    text = summarise_proposal(proposal(ProposalKind.CHANGE_MEDICATION, med=new), MED, "Ravi", TZ)
+    for phrase in (
+        'the name from "Metformin" to "Glycomet"',
+        "the time from 8:00 AM to 8:00 AM and 8:00 PM",
+        'the instructions to "none"',
+        "the start date to 2 Nov 2026",
+        "the end date to 1 Dec 2026",
+    ):
+        assert phrase in text
+
+
+def test_removing_an_end_date_is_described():
+    ended = Medication(
+        **{
+            **MED.__dict__,
+            "details": MedicationDetails(
+                "Metformin",
+                "1 tablet",
+                "With food",
+                ("08:00",),
+                date(2026, 11, 1),
+                date(2026, 12, 1),
+            ),
+        }
+    )
+    text = summarise_proposal(
+        proposal(ProposalKind.CHANGE_MEDICATION, med=MED.details), ended, "Ravi", TZ
+    )
+    assert "the end date to no end date" in text
+
+
+def test_every_appointment_field_change_is_described():
+    new = AppointmentDetails(
+        "Dr. Rao",
+        "Eye test",
+        "",
+        datetime(2026, 11, 21, 5, 0, tzinfo=timezone.utc),
+        "Bring glasses",
+    )
+    text = summarise_proposal(proposal(ProposalKind.CHANGE_APPOINTMENT, appt=new), APPT, "Ravi", TZ)
+    for phrase in (
+        "the time to 21 Nov 2026 at 10:30 AM",
+        "the doctor to Dr. Rao",
+        'the reason to "Eye test"',
+        "the place to not given",
+        "the notes",
+    ):
+        assert phrase in text
+
+
+def test_identical_change_says_nothing_would_differ():
+    med_text = summarise_proposal(
+        proposal(ProposalKind.CHANGE_MEDICATION, med=MED.details), MED, "Ravi", TZ
+    )
+    appt_text = summarise_proposal(
+        proposal(ProposalKind.CHANGE_APPOINTMENT, appt=APPT.details), APPT, "Ravi", TZ
+    )
+    assert "nothing would be different" in med_text
+    assert "nothing would be different" in appt_text
+
+
+@pytest.mark.parametrize("kind", list(ProposalKind))
+def test_missing_details_fall_back_to_a_generic_sentence(kind):
+    text = summarise_proposal(proposal(kind), None, "Ravi", TZ)
+    assert text.startswith("Ravi suggests a change.")

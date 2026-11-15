@@ -127,9 +127,9 @@ main:focus { outline: none; box-shadow: none; }
 .button:hover { text-decoration: underline; }
 
 /* Forms */
-.stack-form { display: grid; gap: 1.25rem; max-width: 36rem; }
+.stack-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; max-width: 36rem; }
 .stack-form > .button { justify-self: start; }
-.field { display: grid; gap: 0.35rem; border: 0; padding: 0; margin: 0; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; border: 0; padding: 0; margin: 0; }
 fieldset.field { border: 0; }
 legend, label { font-weight: 700; }
 .optional { font-weight: 400; color: var(--color-muted); }
@@ -143,7 +143,7 @@ input[type="time"], input[type="number"], select, textarea {
 textarea { min-height: 6rem; }
 .field-error input, .field-error textarea, .field-error select { border-color: var(--color-danger); border-width: 3px; }
 .error-message { margin: 0; color: var(--color-danger-on-bg); font-weight: 700; }
-.time-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
+.time-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: 0.75rem; }
 .radio { display: flex; gap: 0.75rem; align-items: flex-start; margin: 0.5rem 0; }
 .radio input { width: 28px; height: 28px; margin-top: 0.2rem; flex: none; }
 .radio label { font-weight: 400; }
@@ -172,7 +172,7 @@ textarea { min-height: 6rem; }
 .dose-alert { color: var(--color-danger-on-bg); font-weight: 700; }
 .dose-actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
 .dose-actions form { margin: 0; }
-.choice-grid, .two-column, .decision-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.choice-grid, .two-column, .decision-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); }
 .code-card { background: var(--color-surface); }
 .circle-code { font-size: 2.5rem; font-weight: 800; letter-spacing: 0.15em; margin: 0.25rem 0; font-family: "Consolas", "Courier New", monospace; }
 .danger-zone { border-top: 2px solid var(--color-border); margin-top: 2rem; }
@@ -193,12 +193,21 @@ textarea { min-height: 6rem; }
 .detail-list dt { font-weight: 700; }
 .detail-list dd { margin: 0; }
 .action-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin: 1rem 0; }
+/* Wide tables scroll inside their own labelled, focusable region, so the page never scrolls
+   sideways on a phone (WCAG 1.4.10). Long words and email addresses wrap instead of overflowing. */
+.table-scroll { overflow-x: auto; max-width: 100%; margin: 1rem 0; }
+.table-scroll > .data-table { margin: 0; }
+body { overflow-wrap: anywhere; }
+input, select, textarea { max-width: 100%; }
+fieldset { min-width: 0; }
+/* Grid children may shrink below their content width instead of pushing the page wider. */
+.stack-form > *, .field, .two-column > *, .choice-grid > *, .decision-grid > * { min-width: 0; }
 .data-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 1.1rem; }
 .data-table th, .data-table td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--color-border); vertical-align: top; }
 .data-table thead th { border-bottom: 3px solid var(--color-text); }
 .compare-table tr.changed { background: var(--color-warning-bg); }
 .kv-list { margin: 0; padding-left: 1.25rem; font-size: 1rem; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin: 0 0 1rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); gap: 1rem; margin: 0 0 1rem; }
 .stat { background: var(--color-surface); border-radius: var(--radius); padding: 0.75rem 1rem; }
 .stat dt { font-size: 1.05rem; }
 .stat dd { margin: 0; font-size: 2rem; font-weight: 800; }
@@ -219,7 +228,7 @@ textarea { min-height: 6rem; }
 .demo-banner { background: var(--color-warning-bg); color: var(--color-warning-text); border-bottom: 2px solid var(--color-warning-text); }
 .demo-banner p { margin: 0; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .demo-panel { border-color: var(--color-primary); border-width: 3px; }
-.demo-people { list-style: none; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.demo-people { list-style: none; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
 .demo-people form { margin: 0; }
 .demo-people .hint { margin-top: 0.35rem; }
 
@@ -244,6 +253,17 @@ textarea { min-height: 6rem; }
   * { scroll-behavior: auto !important; transition: none !important; }
 }
 
+/* Windows High Contrast / forced colours: box-shadows and backgrounds are dropped by the browser,
+   so focus, the selected text size and status messages are drawn with system colours instead. */
 @media (forced-colors: active) {
-  .button, .badge { border: 2px solid ButtonText; }
+  .button, .badge, .stat, .flash, .error-summary { border: 2px solid ButtonText; }
+  :focus-visible { outline: 4px solid Highlight; outline-offset: 3px; }
+  .text-size-button[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .skip-link:focus { border: 2px solid ButtonText; }
+}
+
+/* Users who ask their system for more contrast get thicker borders and underlines. */
+@media (prefers-contrast: more) {
+  a { text-decoration-thickness: 3px; }
+  input, select, textarea, .button { border-width: 3px; }
 }

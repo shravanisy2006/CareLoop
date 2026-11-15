@@ -23,7 +23,8 @@
 <section aria-labelledby="meds-title">
   <h2 id="meds-title">Medicines and how they were taken</h2>
   {% if rows %}
-  <table class="data-table report-table">
+  <div class="table-scroll" role="region" aria-label="Medicine report" tabindex="0">
+<table class="data-table report-table">
     <caption class="visually-hidden">Doses per medicine in the last {{ days }} days</caption>
     <thead>
       <tr>
@@ -46,6 +47,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p>No medicines recorded.</p>{% endif %}
   {% set adherence = overall %}
   {% include "partials/adherence.html" %}

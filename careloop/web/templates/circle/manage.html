@@ -12,7 +12,8 @@
 
 <section aria-labelledby="people-title">
   <h2 id="people-title">People in {{ viewer.circle.elder_name }}'s care circle</h2>
-  <table class="data-table">
+  <div class="table-scroll" role="region" aria-label="People in this care circle" tabindex="0">
+<table class="data-table">
     <caption class="visually-hidden">Care circle members</caption>
     <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Gets emails</th>{% if is_elder %}<th scope="col">Access</th>{% endif %}</tr></thead>
     <tbody>
@@ -29,6 +30,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 
 {% set helpers = members|rejectattr("role", "equalto", Role.ELDER)|list %}

@@ -5,6 +5,7 @@
 <p><a class="button button-primary" href="/medications/new">
   {% if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}Add a medicine{% else %}Suggest a new medicine{% endif %}</a></p>
 {% if medications %}
+<div class="table-scroll" role="region" aria-label="Medicines" tabindex="0">
 <table class="data-table">
   <caption class="visually-hidden">All medicines in this care circle</caption>
   <thead><tr><th scope="col">Medicine</th><th scope="col">Dose</th><th scope="col">Times</th><th scope="col">Status</th></tr></thead>
@@ -19,6 +20,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <p>No medicines yet.</p>
 {% endif %}

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
+from functools import cache
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -28,6 +30,19 @@ from careloop.web.routes.preferences import TEXT_SIZE_LABELS, TEXT_SIZES, text_s
 from careloop.web.security import csrf_token
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@cache
+def asset_version(name: str) -> str:
+    """Short content hash of a static file, so its URL changes whenever the file does."""
+    return hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
+
+
+def asset_url(request: Request, name: str) -> str:
+    """URL of a static file with a content-hash query, safe to cache for a long time."""
+    return f"{request.url_for('static', path=name).path}?v={asset_version(name)}"
+
 
 ROLE_LABELS = {Role.ELDER: "Elder", Role.CARETAKER: "Caretaker", Role.FAMILY: "Family member"}
 DOSE_STATUS_LABELS = {
@@ -93,6 +108,7 @@ def build_templates() -> Jinja2Templates:
     env.filters["circle_code"] = format_circle_code
     env.globals.update(
         csrf_token=csrf_token,
+        asset_url=asset_url,
         text_size=text_size,
         demo_mode=demo_mode,
         DEMO_PEOPLE=DEMO_PEOPLE,

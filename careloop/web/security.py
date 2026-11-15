@@ -89,6 +89,11 @@ def sign_out(request: Request) -> None:
         request.session["text_size"] = text_size
 
 
+STATIC_CACHE_VERSIONED = "public, max-age=31536000, immutable"
+STATIC_CACHE_UNVERSIONED = "public, max-age=3600"
+HSTS_POLICY = "max-age=31536000; includeSubDomains"
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Adds CSP, anti-framing, no-sniff and no-store headers to every response."""
 
@@ -100,7 +105,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        if not request.url.path.startswith("/static/"):
+        if request.url.path.startswith("/static/"):
+            # Static URLs carry a content hash (rendering.asset_url), so a changed file gets a new
+            # URL and the old one can be cached for a year.
+            versioned = "v" in request.query_params
+            response.headers["Cache-Control"] = (
+                STATIC_CACHE_VERSIONED if versioned else STATIC_CACHE_UNVERSIONED
+            )
+        else:
             # Pages contain health information: never cache them.
             response.headers["Cache-Control"] = "no-store"
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = HSTS_POLICY
         return response

@@ -20,6 +20,7 @@
 {% set med = proposal.medication_details %}
 {% set appt = proposal.appointment_details %}
 {% if med or appt %}
+<div class="table-scroll" role="region" aria-label="Current and suggested details" tabindex="0">
 <table class="data-table compare-table">
   <caption class="visually-hidden">Current details compared with the suggested details</caption>
   <thead><tr><th scope="col">Detail</th>{% if current %}<th scope="col">Now</th>{% endif %}<th scope="col">Suggested</th></tr></thead>
@@ -52,6 +53,7 @@
   {% endif %}
   </tbody>
 </table>
+</div>
 {% elif current %}
 <p>{% if proposal.kind == ProposalKind.STOP_MEDICATION %}Stop taking <strong>{{ current.details.name }}</strong> ({{ current.details.dosage }}, at {{ current.details.times|join(", ") }}).{% else %}Cancel the appointment with <strong>{{ current.details.doctor_name }}</strong> on {{ current.details.starts_at|local_datetime(viewer.circle.timezone) }}.{% endif %}</p>
 {% endif %}

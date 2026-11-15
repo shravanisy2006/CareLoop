@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from tests.conftest import CARETAKER_PASSCODE, ELDER_PASSCODE, medication_details
@@ -158,3 +160,28 @@ def test_malformed_input_gets_a_friendly_error_not_a_stack_trace(services, circl
     response = client.get("/history?days=9999")
     assert response.status_code == 400
     assert "Traceback" not in response.text
+
+
+def test_logs_never_contain_health_data_or_passcodes(services, circle, clock, caplog):
+    caplog.set_level(logging.DEBUG)
+    services.records.add_medication(circle.elder, medication_details(name="Zolpidem-Secret"))
+    client = make_client(services)
+    sign_in(client, circle.code, "Asha Rao", ELDER_PASSCODE)
+    for minutes in (1, 31, 61, 200):
+        clock.advance(minutes=minutes)
+        services.cycle.run_once()
+        client.get("/")
+    bad = make_client(services)
+    token = csrf_from(bad, "/login")
+    bad.post(
+        "/login",
+        data={
+            "circle_code": circle.code,
+            "display_name": "Ravi",
+            "passcode": "guess-123456",
+            "csrf_token": token,
+        },
+    )
+    assert caplog.records, "the care cycle should have logged its counts"
+    for secret in ("Zolpidem-Secret", ELDER_PASSCODE, "guess-123456", "asha@example.com"):
+        assert secret not in caplog.text

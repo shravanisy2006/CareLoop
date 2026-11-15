@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -25,6 +27,7 @@ from careloop.demo import ensure_demo_circle
 from careloop.domain.errors import CareLoopError
 from careloop.services.care_cycle import CareCycleRunner
 from careloop.services.container import Services, build_services
+from careloop.web.rate_limit import SlidingWindowLimiter
 from careloop.web.rendering import build_templates, render
 from careloop.web.routes import (
     appointments,
@@ -42,6 +45,9 @@ from careloop.web.security import NotSignedIn, SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
+SIGN_IN_WINDOW = timedelta(minutes=15)
+# Responses smaller than this are sent uncompressed; compressing them costs more than it saves.
+GZIP_MINIMUM_BYTES = 500
 ROUTE_MODULES = (
     auth,
     dashboard,
@@ -81,6 +87,9 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     )
     app.state.settings = settings
     app.state.services = services
+    app.state.sign_in_limiter = SlidingWindowLimiter(
+        settings.sign_in_attempts_per_window, SIGN_IN_WINDOW, services.ctx.clock
+    )
     app.state.templates = build_templates()
     _add_middleware(app, settings)
     _include_routes(app, settings)
@@ -96,6 +105,7 @@ def _configure_logging() -> None:
 
 
 def _add_middleware(app: FastAPI, settings: Settings) -> None:
+    app.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_BYTES)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         SessionMiddleware,

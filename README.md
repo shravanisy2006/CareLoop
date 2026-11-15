@@ -47,6 +47,18 @@ Reminder apps send a notification and stop, so a missed dose goes unnoticed. Whe
 caretakers step in, they often change schedules without the elder's knowledge, and the apps use
 small text and complex menus that older adults struggle with.
 
+## How CareLoop answers each part of the problem
+
+| Problem | What CareLoop does | Proven by |
+|---|---|---|
+| A missed dose goes unnoticed | Every dose is a record that stays open until someone answers; email escalates elder -> caretaker -> family; if nobody answers it is closed as "no answer recorded", never silently dropped | `test_escalation_climbs_elder_then_caretaker_then_family`, `test_window_closes_as_unconfirmed_not_missed`, property test `test_a_dose_left_alone_walks_the_whole_ladder_then_closes` |
+| Helpers change schedules without the elder knowing | Helpers can only suggest; the elder (or one helper the elder trusts, never on their own suggestion) approves; each request says who advised it, in one plain sentence | `test_caretaker_change_waits_for_elder_approval`, `test_trusted_helper_cannot_approve_their_own_suggestion`, `test_request_page_shows_plain_summary_and_who_advised` |
+| Nobody can see what happened | Append-only activity log, honest adherence history and a printable doctor visit summary, the same for the whole circle | `test_audit_log_is_append_only_in_sqlite`, `test_approval_applies_change_and_records_history`, `test_doctor_visit_summary_reports_real_doses_and_approved_changes` |
+| Small text and complex menus | Large text by default on the elder's pages, a three-step text-size control, big buttons, one main action per screen; WCAG 2.2 AA with 0 axe-core problems on 72 page views, including phone width at the largest text | `test_elder_pages_are_larger_by_default`, `tests/web/test_accessibility.py`, `scripts/accessibility_audit.py` (runs in CI) |
+
+The full mapping of every requirement and evaluation criterion to code and tests is in
+[REQUIREMENTS_MAPPING.md](REQUIREMENTS_MAPPING.md).
+
 ## What is implemented
 
 | Feature | Where to look |
@@ -112,9 +124,11 @@ choose **Start a care circle**.
 Quality checks (the same ones CI runs on every push):
 
 ```bash
-python -m pytest --cov=careloop  # 239 tests; the 6 Firestore ones skip without the emulator
+python -m pytest --cov           # 275 tests (6 Firestore ones skip without the emulator);
+                                 # fails below 90% branch coverage
 ruff check . && ruff format --check .
 mypy                             # mypy --strict on careloop/
+pip-audit -r requirements.txt    # known vulnerabilities in dependencies
 ```
 
 ## Configuration
@@ -133,6 +147,7 @@ repository.
 | `CARELOOP_PUBLIC_URL` | Base URL used in email links | `http://127.0.0.1:8000` |
 | `CARELOOP_SECURE_COOKIES` | `true` when served over HTTPS | `false` |
 | `CARELOOP_SCHEDULER_ENABLED`, `CARELOOP_CYCLE_SECONDS` | Background care cycle and its interval | `true`, `60` |
+| `CARELOOP_SIGN_IN_ATTEMPTS_PER_15_MIN` | Sign-in and sign-up attempts allowed per network address every 15 minutes | `30` |
 | `CARELOOP_DEMO_MODE` | Public demo: sample circle, one-click sign-in buttons, demo banner. Never for real data. | `false` |
 
 ### Public demo link (Render, free)

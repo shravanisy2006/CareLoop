@@ -18,6 +18,7 @@
 
 <h2>Decided</h2>
 {% if decided %}
+<div class="table-scroll" role="region" aria-label="Requests" tabindex="0">
 <table class="data-table">
   <caption class="visually-hidden">Requests that have been decided</caption>
   <thead><tr><th scope="col">Request</th><th scope="col">Suggested by</th><th scope="col">Outcome</th><th scope="col">When</th></tr></thead>
@@ -32,5 +33,6 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}<p>No decided requests yet.</p>{% endif %}
 {% endblock %}

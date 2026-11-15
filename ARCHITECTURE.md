@@ -119,6 +119,19 @@ against details that are no longer current.
 doses → queue appointment reminders (24 h ahead) → deliver queued emails. A lock prevents
 overlapping runs in one process; the conditional updates make multiple processes safe.
 
+## Performance
+
+The app is built for a small device and a free host, so the work per request and per cycle is
+kept small and is checked by tests rather than assumed.
+
+| Concern | Approach | Checked by |
+|---|---|---|
+| Database reads | Every access path has an index (`sqlite_schema.sql`, `firestore.indexes.json`); no query reads a whole table except the cycle's deliberate pass over all circles | `test_no_query_scans_a_whole_table` (`EXPLAIN QUERY PLAN` on every statement of a realistic workload) |
+| N+1 queries | Pages load each list with one query; the home page's query count does not depend on how many medicines there are | `test_dashboard_query_count_does_not_grow_with_the_number_of_medicines` |
+| Care cycle | One pass for all circles; doses generated only 48 hours ahead; members loaded only for circles with a dose or appointment to act on; idempotent inserts instead of locks | `test_dose_generation_is_idempotent`, `test_repeated_cycles_never_send_duplicate_emails` |
+| Contention | Conditional `UPDATE ... WHERE status = ?` and versioned writes in short `BEGIN IMMEDIATE` transactions; SQLite in WAL mode so reads never wait for writes | `test_repository_contract.py` |
+| Network | gzip for responses over 500 bytes; static files have content-hashed URLs and are cached for a year; pages are server-rendered HTML with one stylesheet and no JavaScript | `test_large_responses_are_gzip_compressed`, `test_pages_link_content_hashed_assets_that_are_cached_for_a_year` |
+
 ## Request flow example: "I took it"
 
 1. `POST /doses/{id}/record` with the form's CSRF token (`web/security.verified_form`).
@@ -138,7 +151,9 @@ navigation so it prints on plain paper.
 
 ## Delivery
 
-* `.github/workflows/ci.yml` runs ruff (lint and format), mypy and pytest with coverage on Python
-  3.10 and 3.12 for every push and pull request.
+* `.github/workflows/ci.yml` runs ruff (lint and format), mypy --strict and pytest with a 90%
+  branch-coverage gate on Python 3.10 and 3.12, a `pip-audit` dependency audit, and the browser
+  accessibility audit (axe-core, 320 px reflow, keyboard) for every push and pull request.
+  `codeql.yml` runs CodeQL static analysis; `dependabot.yml` keeps dependencies current.
 * `Dockerfile` packages the app for Cloud Run: unprivileged user, production mode (refuses to start
   without a secret key), Secure cookies, port taken from `$PORT`.

@@ -12,6 +12,7 @@
 </nav>
 <p class="lead">Everything that has happened in this care circle, newest first. Entries cannot be edited or deleted.</p>
 {% if events %}
+<div class="table-scroll" role="region" aria-label="Activity log" tabindex="0">
 <table class="data-table">
   <caption class="visually-hidden">Activity log, newest first</caption>
   <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Details</th></tr></thead>
@@ -34,5 +35,6 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}<p>No activity yet.</p>{% endif %}
 {% endblock %}

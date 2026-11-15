@@ -11,6 +11,7 @@ from careloop.domain.errors import AccountLocked, AuthenticationFailed, Validati
 from careloop.services.container import Services
 from careloop.web.dependencies import get_services
 from careloop.web.forms import form_values
+from careloop.web.rate_limit import TooManyAttempts, check_sign_in_rate
 from careloop.web.rendering import flash, render
 from careloop.web.security import SESSION_MEMBER, sign_in, sign_out, verified_form
 
@@ -42,12 +43,13 @@ async def login(request: Request, services: Services = Depends(get_services)) ->
     form = await verified_form(request)
     values = form_values(form)
     try:
+        check_sign_in_rate(request)
         member = services.auth.sign_in(
             values.get("circle_code", ""),
             values.get("display_name", ""),
             values.get("passcode", ""),
         )
-    except (AuthenticationFailed, AccountLocked) as exc:
+    except (AuthenticationFailed, AccountLocked, TooManyAttempts) as exc:
         values.pop("passcode", None)
         return render(
             request,
@@ -86,6 +88,7 @@ def start_page(request: Request, services: Services = Depends(get_services)) -> 
 async def start(request: Request, services: Services = Depends(get_services)) -> Response:
     """Create a care circle with the elder as its first member, and sign them in."""
     form = await verified_form(request)
+    check_sign_in_rate(request)
     values = form_values(form)
     try:
         circle, elder = services.circles.create_circle(

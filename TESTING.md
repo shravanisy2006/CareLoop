@@ -3,13 +3,15 @@
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest                    # all tests
-python -m pytest --cov=careloop     # with coverage
+python -m pytest --cov              # with branch coverage; fails below 90%
 ruff check . && ruff format --check .   # lint and formatting (incl. security rules)
 mypy                                # strict type check (mypy --strict) of careloop/
 ```
 
 The same four checks run in GitHub Actions on Python 3.10 and 3.12 for every push
-(`.github/workflows/ci.yml`).
+(`.github/workflows/ci.yml`). The same workflow also runs a dependency vulnerability audit
+(`pip-audit`) and the browser accessibility audit below; `codeql.yml` runs GitHub CodeQL static
+analysis, and Dependabot (`.github/dependabot.yml`) opens weekly update pull requests.
 
 Tests use a real SQLite database in a temporary folder, a `FixedClock` that only moves when the
 test tells it to, and a `RecordingSender` in place of Gmail (`tests/conftest.py`). No network or
@@ -22,15 +24,39 @@ Recorded on 15 Nov 2026 on Linux with Python 3.13 (FastAPI 0.163.0) and again wi
 
 | Suite | Tests | Result |
 |---|---|---|
-| `tests/unit` | 86 | 86 passed |
-| `tests/integration` | 67 | 61 passed, 6 skipped (Firestore contract; emulator not available) |
-| `tests/web` | 86 | 86 passed |
-| **Total** | **239** | **233 passed, 6 skipped, 0 failed** |
+| `tests/unit` | 106 | 106 passed (10 of them property-based, each running hundreds of generated cases) |
+| `tests/integration` | 69 | 63 passed, 6 skipped (Firestore contract; emulator not available) |
+| `tests/web` | 100 | 100 passed |
+| **Total** | **275** | **269 passed, 6 skipped, 0 failed** |
 
-Line coverage (`pytest --cov=careloop`): **87% overall**. `firestore_repository.py` is 0% because
-the emulator could not be run here; without that module the figure is about 95%.
+The suite also passes with `-W error` (no warnings, no unclosed resources).
 
-`ruff check .` (26 rule families, see `pyproject.toml`), `ruff format --check .` and `mypy --strict` (66 files): no issues. Any rule that is switched off is listed in `pyproject.toml` with the reason next to it.
+Branch coverage (`pytest --cov`): **94%**, and CI fails if it drops below 90%
+(`[tool.coverage]` in `pyproject.toml`). `firestore_repository.py` is left out of that figure
+because its only tests need the Firestore emulator (see below); it is not hidden - it is named in
+the config with that reason.
+
+`ruff check .` (26 rule families, see `pyproject.toml`), `ruff format --check .` and `mypy --strict` (67 files): no issues. Any rule that is switched off is listed in `pyproject.toml` with the reason next to it.
+
+## Property-based tests (`tests/unit/test_properties.py`)
+
+Hypothesis generates hundreds of schedules, timezones (including daylight-saving zones), policies
+and clock readings per run and checks rules that must hold for all of them:
+
+* every generated dose lies inside the window, is on a scheduled day and time, with no duplicates;
+* splitting a time window in two never loses or duplicates a dose (so cycles can run at any pace);
+* dose ids are deterministic and change with the medication version;
+* every ordered policy within 12 hours is accepted; the target level never decreases over time;
+* escalation climbs at most one level per cycle, never touches resolved doses, and a dose nobody
+  answers walks elder -> caretaker -> family and is then closed as "no answer recorded";
+* adherence counts always add up to the due doses and percentages stay between 0 and 100.
+
+## Efficiency tests (`tests/integration/test_query_efficiency.py`)
+
+* Every SQL statement the app runs during a realistic workload (sign-in, all pages for two roles,
+  four care cycles) is captured and checked with `EXPLAIN QUERY PLAN`: **no query scans a whole
+  table**, except the care cycle's deliberate read of all circles (listed in the test with why).
+* The home page runs **the same number of queries with 1 medicine as with 10** (no N+1 queries).
 
 ## What each suite proves
 
@@ -124,8 +150,11 @@ the emulator could not be run here; without that module the figure is about 95%.
 ## Browser accessibility audit (axe-core)
 
 `scripts/accessibility_audit.py` starts the app with demo data, signs in as each role in headless
-Chrome, runs axe-core with the WCAG 2.0/2.1/2.2 A and AA rule sets on 11 pages per role, and can
-save screenshots.
+Chrome, runs axe-core with the WCAG 2.0/2.1/2.2 A and AA rule sets on 12 pages per role, then
+repeats every page **at 320 CSS px wide with the Extra large text size** (WCAG 1.4.10 Reflow: the
+page must not scroll sideways, and axe runs again), and checks with the keyboard that the first
+Tab reaches the skip link and that it moves focus to the main content. It can save screenshots.
+CI runs it on every push (`accessibility` job, bundled Chromium).
 
 ```bash
 pip install playwright
@@ -133,8 +162,12 @@ npm install axe-core
 python scripts/accessibility_audit.py --axe node_modules/axe-core/axe.min.js --screenshots shots/
 ```
 
-Last result (15 Nov 2026, axe-core 4.x, Google Chrome): **0 violations across 36 page views**
-(12 pages per role, including the request page with its summary and the doctor visit summary).
+Last result (15 Nov 2026, axe-core 4.x, Google Chrome): **0 problems across 72 page views**
+(12 pages per role, at desktop width and at 320 px with Extra large text, including the request
+page with its summary and the doctor visit summary). The first run of the 320 px check found 26
+pages that scrolled sideways (wide tables and grid columns); they were fixed by putting each table
+in its own labelled, keyboard-scrollable region and letting grid columns shrink, and
+`test_every_table_is_in_a_named_keyboard_scrollable_region` keeps it that way.
 A separate run in demo mode (landing page with the demo panel, elder home, doctor summary and
 history) also found 0 violations.
 Automated tools find only part of accessibility problems; the app has not yet been tested with a
