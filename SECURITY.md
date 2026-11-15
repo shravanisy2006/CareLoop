@@ -32,7 +32,14 @@ test. File and test names are given so each claim can be checked.
 * All checks are on the server: `domain/permissions.py` defines a role → action matrix and
   `authorize()` also requires the member to belong to the record's circle. Templates only hide
   buttons for convenience; the service still refuses.
-* Only the elder can edit records directly, decide proposals, manage members and change timings.
+* Only the elder can edit records directly, manage members, change timings and name a trusted
+  decision-maker.
+* Proposals can be decided by the elder or the one helper the elder trusted to decide on their
+  behalf, and never by the person who proposed them, so no single helper can change a record alone
+  (`authorize_decision`; `test_trusted_helper_cannot_approve_their_own_suggestion`,
+  `test_decision_maker_cannot_decide_own_request_in_the_browser`). Such decisions are audited as
+  made on the elder's behalf, and the elder can withdraw the trust at any time
+  (`test_elder_can_take_the_trust_back`).
   Caretakers can record doses on the elder's behalf (attributed to them) and propose. Family can
   view and propose.
 * Records are always looked up and then checked against the member's circle; another circle's id
@@ -69,7 +76,8 @@ test. File and test names are given so each claim can be checked.
 
 * All secrets come from environment variables (`config.py`); `.env` is git-ignored and
   `.env.example` has blank values.
-* In production mode the app refuses to start without a 32+ character `CARELOOP_SECRET_KEY`.
+* In production mode the app refuses to start without a 32+ character `CARELOOP_SECRET_KEY`
+  (`tests/unit/test_config.py`). The Docker image runs as an unprivileged user in production mode.
 * Gmail uses an App Password over implicit TLS (port 465). SMTP server replies are not stored,
   because they can contain addresses.
 

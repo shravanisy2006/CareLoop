@@ -23,6 +23,7 @@ from careloop.domain.models import (
     NotificationKind,
     NotificationStatus,
     Proposal,
+    Role,
 )
 from careloop.integrations.google_calendar import add_to_calendar_url
 
@@ -137,22 +138,31 @@ def proposal_notifications(
     circle: Circle,
     proposal: Proposal,
     proposer: Member,
-    elders: list[Member],
+    deciders: list[Member],
+    summary: str,
     public_url: str,
     now: datetime,
 ) -> list[Notification]:
+    """Tell the elder (and the elder's trusted decision-maker, if any) that a
+    change is waiting. `summary` is the plain-language description."""
     result = []
-    for elder in elders:
-        subject = f"{proposer.display_name} has suggested a change for you to review"
+    for person in deciders:
+        if person.role is Role.ELDER:
+            subject = f"{proposer.display_name} has suggested a change for you to review"
+            why = "Nothing changes unless you approve it."
+        else:
+            subject = f"A change for {circle.elder_name} needs a decision"
+            why = (
+                f"{circle.elder_name} has trusted you to decide on their behalf. "
+                "Nothing changes unless you or they approve it."
+            )
         body = (
-            f"Hello {elder.display_name},\n\n"
-            f"{proposer.display_name} has suggested a change to your care plan.\n"
-            "Nothing changes unless you approve it.\n"
-            f"Review it here: {public_url}/proposals\n"
+            f"Hello {person.display_name},\n\n{summary}\n\n{why}\n"
+            f"Review it here: {public_url}/proposals/{proposal.id}\n"
         )
         result.append(
             _build(
-                NotificationKind.PROPOSAL_PENDING, proposal.id, circle, elder, subject, body, now
+                NotificationKind.PROPOSAL_PENDING, proposal.id, circle, person, subject, body, now
             )
         )
     return result

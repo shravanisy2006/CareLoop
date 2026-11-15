@@ -12,13 +12,14 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
 from careloop.domain.models import (
+    AdviceSource,
     DoseStatus,
     NotificationStatus,
     ProposalKind,
     ProposalStatus,
     Role,
 )
-from careloop.domain.permissions import Action, can
+from careloop.domain.permissions import Action, can, can_decide_proposals
 from careloop.integrations.google_calendar import add_to_calendar_url
 from careloop.notifications.messages import KIND_LABELS
 from careloop.security.identifiers import format_circle_code
@@ -42,6 +43,11 @@ PROPOSAL_KIND_LABELS = {
     ProposalKind.ADD_APPOINTMENT: "Add an appointment",
     ProposalKind.CHANGE_APPOINTMENT: "Change an appointment",
     ProposalKind.CANCEL_APPOINTMENT: "Cancel an appointment",
+}
+ADVICE_SOURCE_LABELS = {
+    AdviceSource.DOCTOR: "A doctor",
+    AdviceSource.PHARMACIST: "A pharmacist",
+    AdviceSource.CARE_TEAM: "Nobody medical (the helper's own suggestion)",
 }
 PROPOSAL_STATUS_LABELS = {
     ProposalStatus.PENDING: "Waiting for decision",
@@ -82,6 +88,7 @@ def build_templates() -> Jinja2Templates:
         TEXT_SIZES=TEXT_SIZES,
         TEXT_SIZE_LABELS=TEXT_SIZE_LABELS,
         can=can,
+        can_decide_proposals=can_decide_proposals,
         Action=Action,
         Role=Role,
         DoseStatus=DoseStatus,
@@ -91,6 +98,7 @@ def build_templates() -> Jinja2Templates:
         DOSE_STATUS_LABELS=DOSE_STATUS_LABELS,
         PROPOSAL_KIND_LABELS=PROPOSAL_KIND_LABELS,
         PROPOSAL_STATUS_LABELS=PROPOSAL_STATUS_LABELS,
+        ADVICE_SOURCE_LABELS=ADVICE_SOURCE_LABELS,
         NOTIFICATION_STATUS_LABELS=NOTIFICATION_STATUS_LABELS,
         NOTIFICATION_KIND_LABELS=KIND_LABELS,
         calendar_url=add_to_calendar_url,

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "partials/macros.html" import field, textarea, error_summary, csrf %}
+{% from "partials/macros.html" import field, textarea, error_summary, csrf, advice_fields %}
 {% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
 {% block title %}{% if appointment %}Change appointment{% else %}New appointment{% endif %}{% endblock %}
 {% block content %}
@@ -14,7 +14,10 @@
   {{ field("time", "Time", values, errors, type="time", hint="24-hour clock, for example 10:30.", required=true) }}
   {{ field("location", "Where", values, errors, maxlength=200) }}
   {{ textarea("notes", "Notes", values, errors, hint="For example: bring the blood test report.") }}
-  {% if not direct %}{{ textarea("reason", "Why are you suggesting this?", values, errors) }}{% endif %}
+  {% if not direct %}
+  {{ advice_fields(values, errors) }}
+  {{ textarea("reason", "Anything else to explain?", values, errors) }}
+  {% endif %}
   <div class="action-row">
     <button type="submit" class="button button-primary">{% if direct %}Save{% else %}Send to {{ viewer.circle.elder_name }} for approval{% endif %}</button>
     <a href="/appointments">Cancel</a>

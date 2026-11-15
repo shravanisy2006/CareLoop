@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from careloop.domain.models import ProposalKind
+from careloop.domain.validation import validate_appointment_input
 from tests.conftest import CARETAKER_PASSCODE, ELDER_PASSCODE, FAMILY_PASSCODE, medication_details
 from tests.web.helpers import CSRF_PATTERN, make_client, sign_in
 
@@ -126,9 +127,22 @@ def _prepare(services, circle, clock):
         medication_details=medication_details(times="09:00"),
         reason="Doctor said so",
     )
+    appointment_id = services.records.add_appointment(
+        circle.elder,
+        validate_appointment_input(
+            doctor_name="Dr. Shah",
+            purpose="Check-up",
+            location="",
+            date_value="2026-11-20",
+            time_value="10:30",
+            notes="",
+            tz_name="Asia/Kolkata",
+            now=clock.now(),
+        ),
+    )
     clock.advance(minutes=45)
     services.cycle.run_once()
-    return med_id, proposal.id
+    return med_id, proposal.id, appointment_id
 
 
 PUBLIC_PAGES = ["/", "/login", "/start"]
@@ -145,7 +159,7 @@ def test_public_pages_are_accessible(services, page):
     [("Asha Rao", ELDER_PASSCODE), ("Ravi", CARETAKER_PASSCODE), ("Meera", FAMILY_PASSCODE)],
 )
 def test_signed_in_pages_are_accessible_for_each_role(services, circle, clock, name, passcode):
-    med_id, proposal_id = _prepare(services, circle, clock)
+    med_id, proposal_id, appointment_id = _prepare(services, circle, clock)
     client = make_client(services)
     sign_in(client, circle.code, name, passcode)
     pages = [
@@ -162,6 +176,9 @@ def test_signed_in_pages_are_accessible_for_each_role(services, circle, clock, n
         "/activity",
         "/notifications",
         "/circle",
+        f"/appointments/{appointment_id}/edit",
+        f"/appointments/{appointment_id}/cancel",
+        "/report",
     ]
     for page in pages:
         response = client.get(page)

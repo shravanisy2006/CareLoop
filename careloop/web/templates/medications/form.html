@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "partials/macros.html" import field, textarea, error_summary, csrf %}
+{% from "partials/macros.html" import field, textarea, error_summary, csrf, advice_fields %}
 {% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
 {% block title %}{% if medication %}Change {{ medication.details.name }}{% else %}New medicine{% endif %}{% endblock %}
 {% block content %}
@@ -29,7 +29,10 @@
   </fieldset>
   {{ field("start_date", "Start date", values, errors, type="date", required=true) }}
   {{ field("end_date", "End date", values, errors, type="date", hint="Leave empty if there is no end date.") }}
-  {% if not direct %}{{ textarea("reason", "Why are you suggesting this?", values, errors) }}{% endif %}
+  {% if not direct %}
+  {{ advice_fields(values, errors) }}
+  {{ textarea("reason", "Anything else to explain?", values, errors) }}
+  {% endif %}
   <div class="action-row">
     <button type="submit" class="button button-primary">{% if direct %}Save{% else %}Send to {{ viewer.circle.elder_name }} for approval{% endif %}</button>
     <a href="{% if medication %}/medications/{{ medication.id }}{% else %}/medications{% endif %}">Cancel</a>

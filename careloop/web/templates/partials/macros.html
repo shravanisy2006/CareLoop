@@ -51,3 +51,23 @@
 {% macro csrf(request) %}<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">{% endmacro %}
 
 {% macro status_badge(text, tone) %}<span class="badge badge-{{ tone }}">{{ text }}</span>{% endmacro %}
+
+{% macro advice_fields(values, errors) %}
+{# Asked of caretakers and family on every suggestion, so whoever decides can
+   see whether a doctor or pharmacist advised it. #}
+{% set source = values.get('advice_source', 'doctor') %}
+{% set error = errors.get('advice_source') %}
+<fieldset class="field advice-fields{% if error %} field-error{% endif %}"{% if error %} aria-describedby="error-advice_source"{% endif %}>
+  <legend>Who advised this change?</legend>
+  <p class="hint">This is shown to the person who approves it.</p>
+  {% if error %}<p class="error-message" id="error-advice_source"><span class="visually-hidden">Error:</span> {{ error }}</p>{% endif %}
+  {% for value, label in [("doctor", "A doctor"), ("pharmacist", "A pharmacist"), ("care_team", "Nobody medical - it is my own suggestion")] %}
+  <div class="radio">
+    <input type="radio" name="advice_source" value="{{ value }}" id="{{ 'field-advice_source' if loop.first else 'advice-' ~ value }}"{% if source == value %} checked{% endif %}>
+    <label for="{{ 'field-advice_source' if loop.first else 'advice-' ~ value }}">{{ label }}</label>
+  </div>
+  {% endfor %}
+</fieldset>
+{{ field("advised_by", "Doctor's or pharmacist's name", values, errors, hint="For example: Dr. Shah. Needed if a doctor or pharmacist advised it.", maxlength=100) }}
+{{ field("advised_on", "When did they advise it?", values, errors, type="date") }}
+{% endmacro %}

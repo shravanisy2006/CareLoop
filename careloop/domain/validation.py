@@ -14,7 +14,13 @@ from zoneinfo import ZoneInfo, available_timezones
 
 from careloop.domain.errors import ValidationFailed
 from careloop.domain.escalation import validate_policy
-from careloop.domain.models import AppointmentDetails, EscalationPolicy, MedicationDetails
+from careloop.domain.models import (
+    Advice,
+    AdviceSource,
+    AppointmentDetails,
+    EscalationPolicy,
+    MedicationDetails,
+)
 from careloop.domain.schedule import parse_local_time
 
 MAX_DOSE_TIMES_PER_DAY = 8
@@ -232,3 +238,26 @@ def validate_policy_input(caretaker: str, family: str, close: str) -> Escalation
     if errors:
         raise ValidationFailed(errors)
     return validate_policy(EscalationPolicy(**values))
+
+
+def validate_advice(source: str, advised_by: str, advised_on: str, *, today: date) -> Advice:
+    """Who advised a suggested change. A doctor's or pharmacist's name is
+    required when they are given as the source, and the date cannot be in
+    the future."""
+    errors: dict[str, str] = {}
+    try:
+        chosen = AdviceSource(source)
+    except ValueError:
+        errors["advice_source"] = "Please say who advised this change."
+        chosen = AdviceSource.CARE_TEAM
+    name = clean_text(advised_by, max_length=100)
+    if len(name) > 100:
+        errors["advised_by"] = "Please keep this under 100 characters."
+    elif chosen in (AdviceSource.DOCTOR, AdviceSource.PHARMACIST) and not name:
+        errors["advised_by"] = f"Please enter the {chosen.value}'s name."
+    when = _parse_date(errors, "advised_on", advised_on, required=False)
+    if when and when > today:
+        errors["advised_on"] = "This date cannot be in the future."
+    if errors:
+        raise ValidationFailed(errors)
+    return Advice(source=chosen, advised_by=name, advised_on=when)

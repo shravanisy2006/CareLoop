@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import csrf, textarea, error_summary, advice_fields %}
+{% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
+{% set d = appointment.details %}
+{% block title %}Cancel appointment{% endblock %}
+{% block content %}
+<h1>{% if direct %}Cancel this appointment?{% else %}Suggest cancelling this appointment{% endif %}</h1>
+<dl class="detail-list">
+  <div><dt>When</dt><dd>{{ d.starts_at|local_datetime(viewer.circle.timezone) }}</dd></div>
+  <div><dt>Doctor</dt><dd>{{ d.doctor_name }}</dd></div>
+  <div><dt>For</dt><dd>{{ d.purpose }}</dd></div>
+</dl>
+{% if not direct %}<p class="lead">{{ viewer.circle.elder_name }} will be asked to approve. Nothing changes until it is approved.</p>{% endif %}
+{{ error_summary(errors) }}
+<form method="post" action="/appointments/{{ appointment.id }}/cancel" class="stack-form" novalidate>
+  {{ csrf(request) }}
+  {% if not direct %}
+  {{ advice_fields(values, errors) }}
+  {{ textarea("reason", "Why should it be cancelled?", values, errors) }}
+  {% endif %}
+  <div class="action-row">
+    <button type="submit" class="button button-danger">{% if direct %}Yes, cancel it{% else %}Send request{% endif %}</button>
+    <a href="/appointments">Go back</a>
+  </div>
+</form>
+{% endblock %}

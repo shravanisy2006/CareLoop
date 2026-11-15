@@ -26,3 +26,4 @@ firebase-debug.log
 # Editors
 .vscode/
 .idea/
+.mypy_cache/

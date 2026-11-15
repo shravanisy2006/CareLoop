@@ -108,6 +108,26 @@ async def remove_member(
     return RedirectResponse("/circle", status_code=303)
 
 
+@router.post("/decision-maker")
+async def set_decision_maker(
+    request: Request,
+    services: Services = Depends(get_services),
+    viewer: Viewer = Depends(get_viewer),
+):
+    form = await verified_form(request)
+    member_id = str(form.get("member_id", "")) or None
+    try:
+        circle = services.circles.set_decision_maker(viewer.member, member_id)
+    except InvalidStateTransition as exc:
+        flash(request, exc.message, "error")
+    else:
+        if circle.decision_maker_id:
+            flash(request, "Saved. That person can now decide on your behalf.")
+        else:
+            flash(request, "Saved. Only you can approve changes now.")
+    return RedirectResponse("/circle", status_code=303)
+
+
 @router.post("/settings")
 async def update_settings(
     request: Request,

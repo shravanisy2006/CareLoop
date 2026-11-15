@@ -2,15 +2,21 @@
 
 **Care that never loses track.**
 
+[![CI](https://github.com/shravanisy2006/CareLoop/actions/workflows/ci.yml/badge.svg)](https://github.com/shravanisy2006/CareLoop/actions/workflows/ci.yml)
+
 CareLoop is a medication and appointment platform for elderly people and the people who help them.
-It differs from a reminder app in two ways:
+It differs from a reminder app in three ways:
 
 1. **Every dose is followed until someone answers.** Each scheduled dose is its own database record.
    If nobody confirms it, email alerts escalate step by step: first the elder, then the caretaker,
    then family, at times the care circle chooses.
-2. **The elder stays in charge.** Caretakers and family can *suggest* changes to medicines or
-   appointments, but nothing changes until the elder approves. Every action is written to an
-   append-only activity log.
+2. **The elder stays in charge.** Caretakers and family can only *suggest* changes to medicines or
+   appointments. Each suggestion says who advised it (a doctor, a pharmacist, or nobody medical)
+   and is explained in one plain sentence. Nothing changes until the elder approves - or, if the
+   elder chooses, one trusted helper approves on their behalf. Nobody can approve their own
+   suggestion.
+3. **Everything is on the record.** An append-only activity log, an honest adherence history and a
+   printable doctor visit summary show the whole circle the same facts.
 
 > CareLoop records what the care circle enters. It never calculates, suggests or changes a dose,
 > and an unconfirmed dose is reported as "no answer recorded", never as "missed".
@@ -27,14 +33,17 @@ small text and complex menus that older adults struggle with.
 |---|---|
 | Passcode sign-in per person, three roles (elder, caretaker, family), lockout after 5 wrong tries | `careloop/services/auth_service.py`, `careloop/domain/permissions.py` |
 | Medicines: add, view, change, stop, with start/end dates and up to 8 times a day | `careloop/services/record_service.py`, `careloop/web/routes/medications.py` |
-| One record per dose: `scheduled → taken / skipped / unconfirmed / cancelled` | `careloop/domain/models.py` (`DoseStatus`), `careloop/services/dose_service.py` |
-| Escalation ladder: elder → caretaker → family → close as "no answer recorded" | `careloop/domain/escalation.py`, `careloop/services/care_cycle.py` |
+| One record per dose: `scheduled -> taken / skipped / unconfirmed / cancelled` | `careloop/domain/models.py` (`DoseStatus`), `careloop/services/dose_service.py` |
+| Escalation ladder: elder -> caretaker -> family -> close as "no answer recorded" | `careloop/domain/escalation.py`, `careloop/services/care_cycle.py` |
 | Email via Gmail SMTP with delivery status, retries and duplicate prevention | `careloop/notifications/`, `careloop/services/notification_delivery.py` |
-| Consent-based changes: propose → elder approves / declines → applied in one transaction | `careloop/domain/changes.py`, `careloop/services/proposal_service.py` |
+| Consent-based changes: propose -> approve / decline -> applied in one transaction | `careloop/domain/changes.py`, `careloop/services/proposal_service.py` |
+| **Trusted decision-maker**: the elder may let one helper decide on their behalf; never on that helper's own suggestion; revocable; recorded as "on behalf of" | `careloop/domain/permissions.py` (`authorize_decision`), `careloop/services/circle_service.py` |
+| **"Who advised this?"** on every suggestion (doctor / pharmacist / own idea, name, date) | `careloop/domain/validation.py` (`validate_advice`), `careloop/web/templates/partials/macros.html` |
+| **Plain-language summaries** of each request, on screen and in the email | `careloop/domain/proposal_summary.py` |
+| **Doctor visit summary**: printable per-medicine adherence, approved changes, next visits | `careloop/web/routes/history.py`, `careloop/web/templates/history/report.html` |
 | Doctor appointments with 24-hour reminders and "Add to Google Calendar" links | `careloop/integrations/google_calendar.py`, `careloop/web/routes/appointments.py` |
 | Append-only audit log with before/after values | `careloop/storage/sqlite_schema.sql` (triggers), `careloop/web/templates/history/activity.html` |
-| Honest adherence summary (taken / skipped / no answer / waiting) | `careloop/domain/adherence.py` |
-| Elder-first screens: 20px text (larger on the elder's own pages), a Normal / Large / Extra large text-size control on every page, 48px+ buttons, no JavaScript, WCAG AA contrast | `careloop/web/templates/`, `careloop/web/static/careloop.css` |
+| Elder-first screens: 20px text (larger on the elder's pages), Normal / Large / Extra large text control on every page, 48px+ buttons, no JavaScript, WCAG AA contrast | `careloop/web/templates/`, `careloop/web/static/careloop.css` |
 | Two storage backends: SQLite (default) and Google Cloud Firestore | `careloop/storage/` |
 
 See [REQUIREMENTS_MAPPING.md](REQUIREMENTS_MAPPING.md) for a criterion-by-criterion map and
@@ -50,6 +59,17 @@ See [REQUIREMENTS_MAPPING.md](REQUIREMENTS_MAPPING.md) for a criterion-by-criter
        any answer at any point stops the ladder; a late answer is still recorded
 ```
 
+## How a change is decided
+
+```
+Ravi (caretaker) suggests "Metformin 2 tablets at 9 AM", advised by Dr. Shah on 14 Nov
+   -> Asha (elder) and, if she chose one, her trusted decision-maker are emailed:
+      "Ravi suggests changing Metformin: the dose from "1 tablet" to "2 tablets" and the
+       time from 8:00 AM to 9:00 AM. Advised by Dr. Shah on 14 Nov 2026."
+   -> Asha approves (or her decision-maker does, recorded as on her behalf; never Ravi himself)
+   -> the medicine, its future doses and the audit log change together, in one transaction
+```
+
 ## Quick start (Windows, macOS or Linux)
 
 Requires Python 3.10 or newer.
@@ -57,7 +77,7 @@ Requires Python 3.10 or newer.
 ```bash
 cd CareLoop
 python -m venv .venv
-# Windows:   .venv\Scripts\activate
+# Windows:     .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
 
@@ -69,12 +89,12 @@ uvicorn careloop.web.app:create_app --factory --reload
 Open http://127.0.0.1:8000. Either sign in with the demo details printed by `seed_demo.py`, or
 choose **Start a care circle**.
 
-Run the tests:
+Quality checks (the same ones CI runs on every push):
 
 ```bash
-python -m pytest                 # 201 tests; the 6 Firestore ones skip without the emulator
-python -m pytest --cov=careloop  # with coverage
-ruff check .                     # lint
+python -m pytest --cov=careloop  # 233 tests; the 6 Firestore ones skip without the emulator
+ruff check . && ruff format --check .
+mypy                             # strict-ish type check of careloop/
 ```
 
 ## Configuration
@@ -98,12 +118,13 @@ repository.
 
 | Service | What it does in CareLoop | Status |
 |---|---|---|
-| **Gmail (SMTP with App Password)** | Sends dose reminders, escalation alerts, appointment reminders and approval requests. | Sender logic tested with a fake SMTP server. A live send needs your Gmail credentials (see below). |
-| **Cloud Firestore** | Alternative storage backend with transactions for every conditional update; indexes and security rules included. | Implemented. Its contract tests run only against the Firestore emulator; see [TESTING.md](TESTING.md) for whether that has been done. |
+| **Gmail (SMTP with App Password)** | Sends dose reminders, escalation alerts, appointment reminders and approval requests. | Sender logic tested with a fake SMTP server; see [TESTING.md](TESTING.md) for live-send status. |
+| **Cloud Firestore** | Alternative storage backend with transactions for every conditional update; indexes and security rules included. | Implemented. Its contract tests run only against the Firestore emulator; see [TESTING.md](TESTING.md). |
 | **Google Calendar** | "Add to Google Calendar" link on every appointment and in reminder emails. | Tested (URL format). No OAuth or calendar access is needed. |
+| **Cloud Run** | `Dockerfile` for deploying the app as a container. | Not built or deployed yet; see below. |
 
 **Gmail setup:** turn on 2-Step Verification on the sending Google account, create an App Password
-(Google Account → Security → App passwords), and put the address and the 16-character password in
+(Google Account -> Security -> App passwords), and put the address and the 16-character password in
 `.env`. Without them, every email is recorded as "Not sent - email not set up" on the Emails page;
 CareLoop never reports an email as sent unless Gmail accepted it.
 
@@ -111,17 +132,30 @@ CareLoop never reports an email as sent unless Gmail accepted it.
 `CARELOOP_STORAGE=firestore`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_APPLICATION_CREDENTIALS`, then
 deploy the indexes and rules with `firebase deploy --only firestore`.
 
+**Cloud Run (optional):**
+```bash
+gcloud run deploy careloop --source . --region asia-south1 \
+  --set-env-vars CARELOOP_STORAGE=firestore,GOOGLE_CLOUD_PROJECT=<project>,CARELOOP_SECRET_KEY=<key> \
+  --min-instances 1 --no-cpu-throttling
+```
+Use Firestore on Cloud Run (container disks are temporary). `--min-instances 1` and
+`--no-cpu-throttling` keep the background care cycle running. The image has not been built in this
+repository's checks because the build environment could not reach Docker Hub; its start command
+(production mode, refuses to start without a secret key, Secure cookies) was run and checked
+directly.
+
 ## Known limitations
 
 - The care cycle runs inside the web process. It only escalates while the app is running; after
   downtime it catches up one step per minute and closes doses whose window has passed rather than
   sending stale alerts.
 - Email is the only notification channel (no SMS or push).
-- The Firestore backend has not been run against live Firestore in this repository's test runs
-  unless TESTING.md says otherwise.
+- The Firestore backend has not been run against live Firestore or the emulator yet.
 - Members are identified by name inside a circle; the circle code is therefore a shared secret.
   Passcodes are per person, hashed with scrypt, and rate-limited.
 - No password-reset flow: the elder removes and re-adds a helper to reset their passcode.
+- Choosing a trusted decision-maker is the elder's own choice inside the app; it is not a legal
+  power of attorney.
 
 ## Project layout
 
@@ -135,8 +169,9 @@ careloop/
   security/        passcode hashing, identifiers
   web/             FastAPI routes, templates, CSS, CSRF and security headers
 tests/
-  unit/            domain rules, validation, permissions, hashing, email sender
-  integration/     services with a real SQLite database, races, repository contract
-  web/             HTTP flows, security, accessibility
+  unit/            domain rules, summaries, validation, permissions, hashing, config, email sender
+  integration/     services with a real SQLite database, races, decision-maker, repository contract
+  web/             HTTP flows, security, accessibility, text size
 scripts/           seed_demo.py, accessibility_audit.py (axe-core in Chrome)
+.github/workflows/ CI: ruff, mypy and pytest on Python 3.10 and 3.12
 ```

@@ -34,7 +34,7 @@ import uvicorn  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 from careloop.clock import FixedClock  # noqa: E402
-from careloop.domain.models import ProposalKind  # noqa: E402
+from careloop.domain.models import Advice, AdviceSource, ProposalKind  # noqa: E402
 from careloop.domain.validation import validate_medication_input  # noqa: E402
 from careloop.notifications.email_sender import UnconfiguredSender  # noqa: E402
 from careloop.services.container import build_services  # noqa: E402
@@ -57,6 +57,7 @@ PAGES = [
     "/activity",
     "/notifications",
     "/circle",
+    "/report",
 ]
 
 
@@ -109,7 +110,8 @@ def seed(services) -> tuple[str, str]:
             start_date=today,
             end_date="",
         ),
-        reason="Doctor's advice",
+        reason="Take it with breakfast",
+        advice=Advice(AdviceSource.DOCTOR, "Dr. Shah"),
     )
     return circle.code, f"/proposals/{proposal.id}"
 

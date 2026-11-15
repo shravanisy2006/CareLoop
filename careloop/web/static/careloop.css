@@ -177,6 +177,9 @@ textarea { min-height: 6rem; }
 .circle-code { font-size: 2.5rem; font-weight: 800; letter-spacing: 0.15em; margin: 0.25rem 0; font-family: "Consolas", "Courier New", monospace; }
 .danger-zone { border-top: 2px solid var(--color-border); margin-top: 2rem; }
 .decision-grid { align-items: end; }
+.summary-box { background: var(--color-surface); border-left: 8px solid var(--color-primary); border-radius: var(--radius); padding: 0.25rem 1.25rem 0.75rem; margin: 1rem 0; }
+.summary-box h2 { margin-top: 0.75rem; font-size: 1.3rem; }
+.summary-text { font-size: 1.35rem; margin: 0.25rem 0; }
 .decision-box { border: 3px solid var(--color-primary); border-radius: var(--radius); padding: 0 1.25rem 1.25rem; margin: 1.5rem 0; }
 
 /* Lists, tables, badges */
@@ -220,6 +223,14 @@ textarea { min-height: 6rem; }
   .detail-list > div { grid-template-columns: 1fr; gap: 0; }
   .dose-actions .button { width: 100%; }
   .dose-actions form { width: 100%; }
+}
+
+@media print {
+  .site-header, .site-footer, .no-print, .skip-link, .flash-region { display: none !important; }
+  body { font-size: 12pt; }
+  .wrap { max-width: none; padding: 0; }
+  a { color: #000; text-decoration: none; }
+  .stat { border: 1px solid #000; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -130,6 +130,23 @@ class DoseService:
         )
         return summarise_adherence(doses, now, circle.policy.caretaker_after_minutes)
 
+    def adherence_by_medication(
+        self, viewer: Member, circle: Circle, days: int = 30
+    ) -> list[tuple[Medication, AdherenceSummary]]:
+        """Per-medicine adherence for the doctor visit summary, from real dose records."""
+        authorize(viewer, Action.VIEW_CIRCLE, circle.id)
+        now = self._ctx.clock.now()
+        doses = self._ctx.repo.list_doses(
+            circle.id, now - timedelta(days=days), now + timedelta(minutes=1)
+        )
+        on_time = circle.policy.caretaker_after_minutes
+        result = []
+        for medication in self._ctx.repo.list_medications(circle.id):
+            own = [d for d in doses if d.medication_id == medication.id]
+            if own or medication.status is MedicationStatus.ACTIVE:
+                result.append((medication, summarise_adherence(own, now, on_time)))
+        return result
+
     # --- Recording an answer -----------------------------------------------
 
     def record(self, actor: Member, dose_id: str, outcome: str) -> Dose:

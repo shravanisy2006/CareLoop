@@ -1,5 +1,5 @@
 """Medicines. The elder changes them directly; anyone else's change becomes a
-proposal for the elder to approve."""
+proposal that changes nothing until it is approved."""
 
 from __future__ import annotations
 
@@ -8,18 +8,27 @@ from fastapi.responses import RedirectResponse
 from starlette.requests import Request
 
 from careloop.domain.errors import ValidationFailed
-from careloop.domain.models import ProposalKind, ProposalStatus
+from careloop.domain.models import Medication, ProposalKind, ProposalStatus
 from careloop.domain.permissions import Action, can
 from careloop.services.container import Services
 from careloop.web.dependencies import Viewer, get_services, get_viewer
 from careloop.web.forms import form_values, medication_from_form, medication_to_values
-from careloop.web.rendering import flash, local_datetime, render
+from careloop.web.proposing import local_today, proposal_sent, submit_proposal
+from careloop.web.rendering import flash, render
 from careloop.web.security import verified_form
 
 router = APIRouter(prefix="/medications")
 
 
-def _form_page(request, viewer, *, values, errors=None, medication=None, status_code=200):
+def _form_page(
+    request: Request,
+    viewer: Viewer,
+    *,
+    values: dict[str, str],
+    errors: dict[str, str] | None = None,
+    medication: Medication | None = None,
+    status_code: int = 200,
+):
     return render(
         request,
         "medications/form.html",
@@ -28,28 +37,14 @@ def _form_page(request, viewer, *, values, errors=None, medication=None, status_
     )
 
 
-def _proposal_sent(request: Request, viewer: Viewer) -> RedirectResponse:
-    flash(
-        request,
-        f"Sent to {viewer.circle.elder_name} for approval. Nothing changes until they agree.",
-    )
-    return RedirectResponse("/proposals", status_code=303)
-
-
 @router.get("")
 def list_medications(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
 ):
-    return render(
-        request,
-        "medications/list.html",
-        {
-            "viewer": viewer,
-            "medications": services.records.list_medications(viewer.member),
-        },
-    )
+    medications = services.records.list_medications(viewer.member)
+    return render(request, "medications/list.html", {"viewer": viewer, "medications": medications})
 
 
 @router.get("/new")
@@ -58,8 +53,8 @@ def new_medication(
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
 ):
-    today = local_datetime(services.ctx.clock.now(), viewer.circle.timezone, "%Y-%m-%d")
-    return _form_page(request, viewer, values={"start_date": today})
+    today = local_today(services, viewer).isoformat()
+    return _form_page(request, viewer, values={"start_date": today, "advice_source": "doctor"})
 
 
 @router.post("")
@@ -70,22 +65,23 @@ async def create_medication(
 ):
     form = await verified_form(request)
     try:
-        details = medication_from_form(form)
         if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):
+            details = medication_from_form(form)
             medication_id = services.records.add_medication(viewer.member, details)
             flash(request, f"{details.name} was added.")
             return RedirectResponse(f"/medications/{medication_id}", status_code=303)
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.ADD_MEDICATION,
-            medication_details=details,
-            reason=str(form.get("reason", "")),
+        submit_proposal(
+            services,
+            viewer,
+            form,
+            ProposalKind.ADD_MEDICATION,
+            details_check=lambda: medication_from_form(form),
         )
     except ValidationFailed as exc:
         return _form_page(
             request, viewer, values=form_values(form), errors=exc.field_errors, status_code=422
         )
-    return _proposal_sent(request, viewer)
+    return proposal_sent(request, viewer)
 
 
 @router.get("/{medication_id}")
@@ -108,6 +104,8 @@ def medication_detail(
             "viewer": viewer,
             "medication": medication,
             "pending": pending,
+            "values": {},
+            "errors": {},
         },
     )
 
@@ -120,9 +118,8 @@ def edit_medication_page(
     viewer: Viewer = Depends(get_viewer),
 ):
     medication = services.records.get_medication(viewer.member, medication_id)
-    return _form_page(
-        request, viewer, values=medication_to_values(medication), medication=medication
-    )
+    values = {**medication_to_values(medication), "advice_source": "doctor"}
+    return _form_page(request, viewer, values=values, medication=medication)
 
 
 @router.post("/{medication_id}/edit")
@@ -135,17 +132,18 @@ async def edit_medication(
     form = await verified_form(request)
     medication = services.records.get_medication(viewer.member, medication_id)
     try:
-        details = medication_from_form(form)
         if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):
+            details = medication_from_form(form)
             services.records.change_medication(viewer.member, medication.id, details)
             flash(request, f"{details.name} was updated. Upcoming doses follow the new schedule.")
             return RedirectResponse(f"/medications/{medication.id}", status_code=303)
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.CHANGE_MEDICATION,
+        submit_proposal(
+            services,
+            viewer,
+            form,
+            ProposalKind.CHANGE_MEDICATION,
+            details_check=lambda: medication_from_form(form),
             target_id=medication.id,
-            medication_details=details,
-            reason=str(form.get("reason", "")),
         )
     except ValidationFailed as exc:
         return _form_page(
@@ -156,7 +154,7 @@ async def edit_medication(
             medication=medication,
             status_code=422,
         )
-    return _proposal_sent(request, viewer)
+    return proposal_sent(request, viewer)
 
 
 @router.post("/{medication_id}/stop")
@@ -176,13 +174,20 @@ async def stop_medication(
         )
         return RedirectResponse(f"/medications/{medication.id}", status_code=303)
     try:
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.STOP_MEDICATION,
-            target_id=medication.id,
-            reason=str(form.get("reason", "")),
+        submit_proposal(
+            services, viewer, form, ProposalKind.STOP_MEDICATION, target_id=medication.id
         )
     except ValidationFailed as exc:
-        flash(request, next(iter(exc.field_errors.values())), "error")
-        return RedirectResponse(f"/medications/{medication.id}", status_code=303)
-    return _proposal_sent(request, viewer)
+        return render(
+            request,
+            "medications/detail.html",
+            {
+                "viewer": viewer,
+                "medication": medication,
+                "pending": [],
+                "values": form_values(form),
+                "errors": exc.field_errors,
+            },
+            status_code=422,
+        )
+    return proposal_sent(request, viewer)

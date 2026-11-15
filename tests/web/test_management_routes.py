@@ -6,6 +6,10 @@ from careloop.domain.models import AppointmentStatus, MedicationStatus, Proposal
 from tests.conftest import CARETAKER_PASSCODE, ELDER_PASSCODE, FAMILY_PASSCODE, medication_details
 from tests.web.helpers import make_client, post_form, sign_in
 
+# Caretakers and family must say who advised a suggestion.
+OWN_IDEA = {"advice_source": "care_team"}
+DOCTOR_ADVICE = {"advice_source": "doctor", "advised_by": "Dr. Shah", "advised_on": "2026-11-14"}
+
 APPOINTMENT_FORM = {
     "doctor_name": "Dr. Shah",
     "purpose": "Check-up",
@@ -124,7 +128,8 @@ def test_elder_changes_escalation_timings(services, circle):
 def test_family_proposes_appointment_and_elder_declines(services, circle):
     family = make_client(services)
     sign_in(family, circle.code, "Meera", FAMILY_PASSCODE)
-    assert post_form(family, "/appointments", APPOINTMENT_FORM).headers["location"] == "/proposals"
+    response = post_form(family, "/appointments", {**APPOINTMENT_FORM, **DOCTOR_ADVICE})
+    assert response.headers["location"] == "/proposals"
     [proposal] = services.ctx.repo.list_proposals(circle.elder.circle_id)
 
     client = elder_client(services, circle)
@@ -138,7 +143,7 @@ def test_caretaker_withdraws_own_request(services, circle):
     med_id = services.records.add_medication(circle.elder, medication_details())
     caretaker = make_client(services)
     sign_in(caretaker, circle.code, "Ravi", CARETAKER_PASSCODE)
-    post_form(caretaker, f"/medications/{med_id}/stop", {"reason": "Finished course"})
+    post_form(caretaker, f"/medications/{med_id}/stop", {"reason": "Finished course", **OWN_IDEA})
     [proposal] = services.ctx.repo.list_proposals(circle.elder.circle_id)
     assert "Withdraw my request" in caretaker.get(f"/proposals/{proposal.id}").text
     post_form(caretaker, f"/proposals/{proposal.id}/withdraw", {})
@@ -170,9 +175,13 @@ def test_caretaker_suggests_appointment_change_and_cancellation(services, circle
     caretaker = make_client(services)
     sign_in(caretaker, circle.code, "Ravi", CARETAKER_PASSCODE)
     post_form(
-        caretaker, f"/appointments/{appointment.id}/edit", {**APPOINTMENT_FORM, "time": "12:00"}
+        caretaker,
+        f"/appointments/{appointment.id}/edit",
+        {**APPOINTMENT_FORM, "time": "12:00", **OWN_IDEA},
     )
-    post_form(caretaker, f"/appointments/{appointment.id}/cancel", {"reason": "Doctor away"})
+    post_form(
+        caretaker, f"/appointments/{appointment.id}/cancel", {"reason": "Doctor away", **OWN_IDEA}
+    )
     kinds = sorted(p.kind.value for p in services.ctx.repo.list_proposals(circle.elder.circle_id))
     assert kinds == ["cancel_appointment", "change_appointment"]
     assert services.ctx.repo.get_appointment(appointment.id).version == 1  # untouched

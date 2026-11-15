@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "partials/macros.html" import csrf, textarea %}
 {% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
 {% block title %}Appointments{% endblock %}
 {% block content %}
@@ -20,11 +19,7 @@
     <a href="{{ calendar_url(a, viewer.circle.elder_name) }}" rel="noopener noreferrer" target="_blank">Add to Google Calendar<span class="visually-hidden"> (opens in a new tab)</span></a>
     <a href="/appointments/{{ a.id }}/edit">{% if direct %}Change{% else %}Suggest a change{% endif %}<span class="visually-hidden"> to the appointment on {{ a.details.starts_at|local_datetime(viewer.circle.timezone) }}</span></a>
   </div>
-  <form method="post" action="/appointments/{{ a.id }}/cancel" class="stack-form">
-    {{ csrf(request) }}
-    {% if not direct %}{{ textarea("reason", "Reason for cancelling", {}, {}) }}{% endif %}
-    <button type="submit" class="button button-danger">{% if direct %}Cancel this appointment{% else %}Suggest cancelling{% endif %}</button>
-  </form>
+  <p><a class="button button-danger" href="/appointments/{{ a.id }}/cancel">{% if direct %}Cancel this appointment{% else %}Suggest cancelling{% endif %}<span class="visually-hidden"> on {{ a.details.starts_at|local_datetime(viewer.circle.timezone) }}</span></a></p>
 </article>
 {% endfor %}
 {% else %}<p>No upcoming appointments.</p>{% endif %}

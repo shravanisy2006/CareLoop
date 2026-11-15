@@ -77,7 +77,15 @@ def test_caretaker_change_waits_for_elder_approval(services, circle):
     med_id = services.records.add_medication(circle.elder, medication_details())
     caretaker = make_client(services)
     sign_in(caretaker, circle.code, "Ravi", CARETAKER_PASSCODE)
-    changed = {**MEDICINE_FORM, "name": "Metformin", "time_1": "09:00", "reason": "Doctor said 9am"}
+    changed = {
+        **MEDICINE_FORM,
+        "name": "Metformin",
+        "time_1": "09:00",
+        "reason": "Take it with breakfast",
+        "advice_source": "doctor",
+        "advised_by": "Dr. Shah",
+        "advised_on": "2026-11-14",
+    }
     response = post_form(caretaker, f"/medications/{med_id}/edit", changed)
     assert response.status_code == 303 and response.headers["location"] == "/proposals"
 

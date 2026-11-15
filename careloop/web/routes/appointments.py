@@ -1,4 +1,5 @@
-"""Doctor appointments, with the same elder-decides rule as medicines."""
+"""Doctor appointments, with the same rule as medicines: the elder changes
+them directly; anyone else's change is a proposal until it is approved."""
 
 from __future__ import annotations
 
@@ -7,18 +8,27 @@ from fastapi.responses import RedirectResponse
 from starlette.requests import Request
 
 from careloop.domain.errors import ValidationFailed
-from careloop.domain.models import AppointmentStatus, ProposalKind
+from careloop.domain.models import Appointment, AppointmentStatus, ProposalKind
 from careloop.domain.permissions import Action, can
 from careloop.services.container import Services
 from careloop.web.dependencies import Viewer, get_services, get_viewer
 from careloop.web.forms import appointment_from_form, appointment_to_values, form_values
+from careloop.web.proposing import proposal_sent, submit_proposal
 from careloop.web.rendering import flash, render
 from careloop.web.security import verified_form
 
 router = APIRouter(prefix="/appointments")
 
 
-def _form_page(request, viewer, *, values, errors=None, appointment=None, status_code=200):
+def _form_page(
+    request: Request,
+    viewer: Viewer,
+    *,
+    values: dict[str, str],
+    errors: dict[str, str] | None = None,
+    appointment: Appointment | None = None,
+    status_code: int = 200,
+):
     return render(
         request,
         "appointments/form.html",
@@ -27,12 +37,26 @@ def _form_page(request, viewer, *, values, errors=None, appointment=None, status
     )
 
 
-def _proposal_sent(request: Request, viewer: Viewer) -> RedirectResponse:
-    flash(
+def _cancel_page(
+    request: Request,
+    viewer: Viewer,
+    appointment: Appointment,
+    *,
+    values: dict[str, str] | None = None,
+    errors: dict[str, str] | None = None,
+    status_code: int = 200,
+):
+    return render(
         request,
-        f"Sent to {viewer.circle.elder_name} for approval. Nothing changes until they agree.",
+        "appointments/cancel.html",
+        {
+            "viewer": viewer,
+            "appointment": appointment,
+            "values": values or {"advice_source": "doctor"},
+            "errors": errors or {},
+        },
+        status_code=status_code,
     )
-    return RedirectResponse("/proposals", status_code=303)
 
 
 @router.get("")
@@ -52,17 +76,13 @@ def list_appointments(
     return render(
         request,
         "appointments/list.html",
-        {
-            "viewer": viewer,
-            "upcoming": upcoming,
-            "past": list(reversed(past)),
-        },
+        {"viewer": viewer, "upcoming": upcoming, "past": list(reversed(past))},
     )
 
 
 @router.get("/new")
 def new_appointment(request: Request, viewer: Viewer = Depends(get_viewer)):
-    return _form_page(request, viewer, values={})
+    return _form_page(request, viewer, values={"advice_source": "doctor"})
 
 
 @router.post("")
@@ -72,23 +92,25 @@ async def create_appointment(
     viewer: Viewer = Depends(get_viewer),
 ):
     form = await verified_form(request)
+    tz, now = viewer.circle.timezone, services.ctx.clock.now()
     try:
-        details = appointment_from_form(form, viewer.circle.timezone, services.ctx.clock.now())
         if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):
+            details = appointment_from_form(form, tz, now)
             services.records.add_appointment(viewer.member, details)
             flash(request, f"Appointment with {details.doctor_name} was added.")
             return RedirectResponse("/appointments", status_code=303)
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.ADD_APPOINTMENT,
-            appointment_details=details,
-            reason=str(form.get("reason", "")),
+        submit_proposal(
+            services,
+            viewer,
+            form,
+            ProposalKind.ADD_APPOINTMENT,
+            details_check=lambda: appointment_from_form(form, tz, now),
         )
     except ValidationFailed as exc:
         return _form_page(
             request, viewer, values=form_values(form), errors=exc.field_errors, status_code=422
         )
-    return _proposal_sent(request, viewer)
+    return proposal_sent(request, viewer)
 
 
 @router.get("/{appointment_id}/edit")
@@ -99,12 +121,11 @@ def edit_appointment_page(
     viewer: Viewer = Depends(get_viewer),
 ):
     appointment = services.records.get_appointment(viewer.member, appointment_id)
-    return _form_page(
-        request,
-        viewer,
-        values=appointment_to_values(appointment, viewer.circle.timezone),
-        appointment=appointment,
-    )
+    values = {
+        **appointment_to_values(appointment, viewer.circle.timezone),
+        "advice_source": "doctor",
+    }
+    return _form_page(request, viewer, values=values, appointment=appointment)
 
 
 @router.post("/{appointment_id}/edit")
@@ -116,18 +137,20 @@ async def edit_appointment(
 ):
     form = await verified_form(request)
     appointment = services.records.get_appointment(viewer.member, appointment_id)
+    tz, now = viewer.circle.timezone, services.ctx.clock.now()
     try:
-        details = appointment_from_form(form, viewer.circle.timezone, services.ctx.clock.now())
         if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):
+            details = appointment_from_form(form, tz, now)
             services.records.change_appointment(viewer.member, appointment.id, details)
             flash(request, "The appointment was updated.")
             return RedirectResponse("/appointments", status_code=303)
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.CHANGE_APPOINTMENT,
+        submit_proposal(
+            services,
+            viewer,
+            form,
+            ProposalKind.CHANGE_APPOINTMENT,
+            details_check=lambda: appointment_from_form(form, tz, now),
             target_id=appointment.id,
-            appointment_details=details,
-            reason=str(form.get("reason", "")),
         )
     except ValidationFailed as exc:
         return _form_page(
@@ -138,7 +161,19 @@ async def edit_appointment(
             appointment=appointment,
             status_code=422,
         )
-    return _proposal_sent(request, viewer)
+    return proposal_sent(request, viewer)
+
+
+@router.get("/{appointment_id}/cancel")
+def cancel_appointment_page(
+    appointment_id: str,
+    request: Request,
+    services: Services = Depends(get_services),
+    viewer: Viewer = Depends(get_viewer),
+):
+    """Ask for confirmation before cancelling (or suggesting to cancel)."""
+    appointment = services.records.get_appointment(viewer.member, appointment_id)
+    return _cancel_page(request, viewer, appointment)
 
 
 @router.post("/{appointment_id}/cancel")
@@ -155,13 +190,16 @@ async def cancel_appointment(
         flash(request, "The appointment was cancelled.")
         return RedirectResponse("/appointments", status_code=303)
     try:
-        services.proposals.propose(
-            viewer.member,
-            kind=ProposalKind.CANCEL_APPOINTMENT,
-            target_id=appointment.id,
-            reason=str(form.get("reason", "")),
+        submit_proposal(
+            services, viewer, form, ProposalKind.CANCEL_APPOINTMENT, target_id=appointment.id
         )
     except ValidationFailed as exc:
-        flash(request, next(iter(exc.field_errors.values())), "error")
-        return RedirectResponse("/appointments", status_code=303)
-    return _proposal_sent(request, viewer)
+        return _cancel_page(
+            request,
+            viewer,
+            appointment,
+            values=form_values(form),
+            errors=exc.field_errors,
+            status_code=422,
+        )
+    return proposal_sent(request, viewer)

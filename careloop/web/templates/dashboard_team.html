@@ -3,6 +3,16 @@
 {% block content %}
 <h1>{{ viewer.circle.elder_name }}'s care today</h1>
 <p class="lead">You can see everything and suggest changes. {{ viewer.circle.elder_name }} approves every change.</p>
+{% if can_decide_proposals(viewer.member, viewer.circle) %}
+{% set to_decide = pending_proposals|rejectattr("proposed_by", "equalto", viewer.member.id)|list %}
+{% if to_decide %}
+<section class="notice-box" aria-labelledby="decide-title">
+  <h2 id="decide-title">{{ to_decide|length }} {{ "change needs" if to_decide|length == 1 else "changes need" }} a decision</h2>
+  <p>{{ viewer.circle.elder_name }} has trusted you to decide on their behalf.</p>
+  <a class="button button-primary" href="/proposals">Review</a>
+</section>
+{% endif %}
+{% endif %}
 
 <section aria-labelledby="attention-title">
   <h2 id="attention-title">Doses waiting for an answer</h2>

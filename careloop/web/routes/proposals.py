@@ -27,12 +27,14 @@ def list_proposals(
     viewer: Viewer = Depends(get_viewer),
 ):
     proposals = services.proposals.list(viewer.member)
+    pending = [p for p in proposals if p.status is ProposalStatus.PENDING]
     return render(
         request,
         "proposals/list.html",
         {
             "viewer": viewer,
-            "pending": [p for p in proposals if p.status is ProposalStatus.PENDING],
+            "pending": pending,
+            "summaries": {p.id: services.proposals.summary(viewer.member, p) for p in pending},
             "decided": [p for p in proposals if p.status is not ProposalStatus.PENDING][:30],
             "names": _names(services, viewer),
         },
@@ -54,6 +56,7 @@ def proposal_detail(
             "viewer": viewer,
             "proposal": proposal,
             "current": services.proposals.current_target(viewer.member, proposal),
+            "summary": services.proposals.summary(viewer.member, proposal),
             "names": _names(services, viewer),
         },
     )

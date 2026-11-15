@@ -23,12 +23,12 @@ database. Services combine rules with storage. Routes only parse forms, call a s
 
 | Entity | Key fields | Notes |
 |---|---|---|
-| `Circle` | id, code, elder_name, timezone, escalation policy | One elder's care circle |
+| `Circle` | id, code, elder_name, timezone, escalation policy, decision_maker_id | One elder's care circle; `decision_maker_id` is the helper the elder trusts to decide (optional) |
 | `Member` | id, circle_id, display_name, role, email, passcode_hash, failed_attempts, locked_until, active | Name unique per circle |
 | `Medication` | id, circle_id, name, dosage, instructions, times, start/end date, status, **version** | Version used for optimistic concurrency |
 | `Dose` | id, medication_id, scheduled_for, status, escalation_level, resolved_at/by/role | One row per dose |
 | `Appointment` | id, circle_id, doctor, purpose, location, starts_at, status, **version** | |
-| `Proposal` | id, kind, target_id, base_version, proposed details, reason, status, proposed_by, decided_by/at | Never edits a record by itself |
+| `Proposal` | id, kind, target_id, base_version, proposed details, reason, advice (source, advised_by, advised_on), status, proposed_by, decided_by/at | Never edits a record by itself |
 | `Notification` | id = hash(kind, ref_key, recipient), status, attempts, last_error, sent_at | Deterministic id prevents duplicates |
 | `AuditEvent` | actor, actor_role, action, entity, before, after, created_at | Append-only |
 
@@ -37,6 +37,10 @@ role, a check that a taken/skipped dose records who and when, a partial unique i
 live dose per medication per time, a unique `(kind, ref_key, recipient)` for notifications, a
 unique `(circle_id, name_key)` for members, indexes for each query path, and triggers that abort
 any `UPDATE` or `DELETE` on `audit_events`.
+
+Columns added after the first version (`decision_maker_id`, the three advice columns) are added to
+existing SQLite databases at start-up (`SqliteRepository.ADDED_COLUMNS`), so an existing
+`careloop.db` keeps working (`test_existing_database_is_upgraded_in_place`).
 
 Firestore stores the same flat records (`careloop/storage/records.py`); composite indexes are in
 `firestore.indexes.json`, and `firestore.rules` denies all client access.
@@ -80,9 +84,11 @@ same transaction. So:
 ## Consent-based change management
 
 ```
-caretaker/family --propose--> Proposal(PENDING) + email to elder + audit
+caretaker/family --propose (+ who advised it)--> Proposal(PENDING)
+                 + plain-language email to the elder and the trusted decision-maker (if any)
+                 + audit
                                    |
-            elder approves --------+-------- elder declines / proposer withdraws
+   elder (or trusted helper) approves --+-- they decline / proposer withdraws
                  |                                   |
   ChangeSet: proposal->APPROVED                ChangeSet: proposal->REJECTED/CANCELLED
              + record change (version check)
@@ -90,6 +96,16 @@ caretaker/family --propose--> Proposal(PENDING) + email to elder + audit
              + audit (before/after)
   applied by repo.apply_changeset() in ONE transaction
 ```
+
+Who may decide is one rule in `domain/permissions.py::authorize_decision`: the elder, or the single
+helper the elder named as trusted decision-maker, and never the person who made the proposal. A
+helper's decision is audited with `on_behalf_of_elder: true`. Only the elder can name or remove
+the decision-maker, and removing that helper from the circle clears it.
+
+`domain/proposal_summary.py` turns a proposal into one everyday sentence ("Ravi suggests changing
+Metformin: the dose from "1 tablet" to "2 tablets"... Advised by Dr. Shah on 14 Nov 2026.") used on
+the request page, the request list and the email, so the decider sees what changes and who advised
+it before the detailed comparison table.
 
 `domain/changes.py` builds the same ChangeSet whether the elder edits directly or approves a
 proposal, so there is one definition of each change. Approval is refused if the record's version
@@ -112,3 +128,17 @@ overlapping runs in one process; the conditional updates make multiple processes
 4. `repo.resolve_dose` updates it conditionally, cancels unsent alerts and writes the audit event
    in one transaction.
 5. The route redirects home with a confirmation message announced by a `role="status"` live region.
+
+## Reports
+
+`/report` is a printable doctor visit summary built from the same dose records: per-medicine
+taken / skipped / no-answer counts (`DoseService.adherence_by_medication`), changes approved in the
+period with who advised and who approved them, and the next appointments. A print stylesheet hides
+navigation so it prints on plain paper.
+
+## Delivery
+
+* `.github/workflows/ci.yml` runs ruff (lint and format), mypy and pytest with coverage on Python
+  3.10 and 3.12 for every push and pull request.
+* `Dockerfile` packages the app for Cloud Run: unprivileged user, production mode (refuses to start
+  without a secret key), Secure cookies, port taken from `$PORT`.

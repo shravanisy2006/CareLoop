@@ -8,10 +8,12 @@ UTC ISO-8601 strings with microseconds, which sort correctly as text.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from careloop.domain.models import (
+    Advice,
+    AdviceSource,
     Appointment,
     AppointmentDetails,
     AppointmentStatus,
@@ -68,6 +70,7 @@ def circle_to_record(circle: Circle) -> Record:
         "family_after_minutes": circle.policy.family_after_minutes,
         "close_after_minutes": circle.policy.close_after_minutes,
         "created_at": ts(circle.created_at),
+        "decision_maker_id": circle.decision_maker_id,
     }
 
 
@@ -83,6 +86,7 @@ def record_to_circle(r: Record) -> Circle:
             close_after_minutes=int(r["close_after_minutes"]),
         ),
         created_at=_req_ts(r["created_at"]),
+        decision_maker_id=r.get("decision_maker_id"),
     )
 
 
@@ -253,6 +257,9 @@ def proposal_to_record(p: Proposal) -> Record:
         "decided_by": p.decided_by,
         "decided_at": ts(p.decided_at),
         "decision_note": p.decision_note,
+        "advice_source": p.advice.source.value,
+        "advised_by": p.advice.advised_by,
+        "advised_on": p.advice.advised_on.isoformat() if p.advice.advised_on else None,
     }
 
 
@@ -277,6 +284,11 @@ def record_to_proposal(r: Record) -> Proposal:
         decided_by=r["decided_by"],
         decided_at=parse_ts(r["decided_at"]),
         decision_note=r["decision_note"] or "",
+        advice=Advice(
+            source=AdviceSource(r.get("advice_source") or AdviceSource.CARE_TEAM.value),
+            advised_by=r.get("advised_by") or "",
+            advised_on=date.fromisoformat(r["advised_on"]) if r.get("advised_on") else None,
+        ),
     )
 
 

@@ -27,6 +27,7 @@ from careloop.domain.models import (
     Proposal,
     ProposalKind,
     ProposalStatus,
+    Role,
     bump,
 )
 
@@ -215,12 +216,14 @@ def _merge(target: ChangeSet, extra: ChangeSet) -> ChangeSet:
     return target
 
 
-def _decided(proposal: Proposal, status: ProposalStatus, elder: Member, now: datetime, note: str):
-    return replace(proposal, status=status, decided_by=elder.id, decided_at=now, decision_note=note)
+def _decided(proposal: Proposal, status: ProposalStatus, decider: Member, now: datetime, note: str):
+    return replace(
+        proposal, status=status, decided_by=decider.id, decided_at=now, decision_note=note
+    )
 
 
 def approve_proposal(
-    elder: Member,
+    decider: Member,
     proposal: Proposal,
     target: Medication | Appointment | None,
     now: datetime,
@@ -228,10 +231,11 @@ def approve_proposal(
     note: str = "",
 ) -> ChangeSet:
     """Describe approving `proposal`: the proposal is marked approved and its
-    change is applied, together, or not at all.
+    change is applied, together, or not at all. `decider` is the elder or the
+    elder's trusted decision-maker; permission is checked by the caller.
 
     If the target record changed after the proposal was made, approval is
-    refused so the elder never approves something based on stale details.
+    refused so the decider never approves something based on stale details.
     """
     if proposal.status is not ProposalStatus.PENDING:
         raise InvalidStateTransition("This request has already been decided.")
@@ -246,56 +250,68 @@ def approve_proposal(
     kind = proposal.kind
     if kind is ProposalKind.ADD_MEDICATION:
         assert proposal.medication_details is not None
-        effect = add_medication(elder, proposal.medication_details, now, new_id())
+        effect = add_medication(decider, proposal.medication_details, now, new_id())
     elif kind is ProposalKind.CHANGE_MEDICATION:
         assert isinstance(target, Medication) and proposal.medication_details is not None
-        effect = change_medication(elder, target, proposal.medication_details, now)
+        effect = change_medication(decider, target, proposal.medication_details, now)
     elif kind is ProposalKind.STOP_MEDICATION:
         assert isinstance(target, Medication)
-        effect = stop_medication(elder, target, now)
+        effect = stop_medication(decider, target, now)
     elif kind is ProposalKind.ADD_APPOINTMENT:
         assert proposal.appointment_details is not None
-        effect = add_appointment(elder, proposal.appointment_details, now, new_id())
+        effect = add_appointment(decider, proposal.appointment_details, now, new_id())
     elif kind is ProposalKind.CHANGE_APPOINTMENT:
         assert isinstance(target, Appointment) and proposal.appointment_details is not None
-        effect = change_appointment(elder, target, proposal.appointment_details, now)
+        effect = change_appointment(decider, target, proposal.appointment_details, now)
     else:
         assert isinstance(target, Appointment)
-        effect = cancel_appointment(elder, target, now)
+        effect = cancel_appointment(decider, target, now)
 
-    decided = _decided(proposal, ProposalStatus.APPROVED, elder, now, note)
+    decided = _decided(proposal, ProposalStatus.APPROVED, decider, now, note)
     changes = ChangeSet(
         proposals=[(decided, ProposalStatus.PENDING)],
         audit_events=[
             audit_event(
-                elder,
+                decider,
                 "proposal.approved",
                 "proposal",
                 proposal.id,
                 now,
                 before={"status": proposal.status.value},
-                after={"status": decided.status.value, "kind": kind.value, "note": note},
+                after={
+                    "status": decided.status.value,
+                    "kind": kind.value,
+                    "note": note,
+                    "on_behalf_of_elder": decider.role is not Role.ELDER,
+                },
             )
         ],
     )
     return _merge(changes, effect)
 
 
-def reject_proposal(elder: Member, proposal: Proposal, now: datetime, note: str = "") -> ChangeSet:
+def reject_proposal(
+    decider: Member, proposal: Proposal, now: datetime, note: str = ""
+) -> ChangeSet:
     if proposal.status is not ProposalStatus.PENDING:
         raise InvalidStateTransition("This request has already been decided.")
-    decided = _decided(proposal, ProposalStatus.REJECTED, elder, now, note)
+    decided = _decided(proposal, ProposalStatus.REJECTED, decider, now, note)
     return ChangeSet(
         proposals=[(decided, ProposalStatus.PENDING)],
         audit_events=[
             audit_event(
-                elder,
+                decider,
                 "proposal.rejected",
                 "proposal",
                 proposal.id,
                 now,
                 before={"status": proposal.status.value},
-                after={"status": decided.status.value, "kind": proposal.kind.value, "note": note},
+                after={
+                    "status": decided.status.value,
+                    "kind": proposal.kind.value,
+                    "note": note,
+                    "on_behalf_of_elder": decider.role is not Role.ELDER,
+                },
             )
         ],
     )

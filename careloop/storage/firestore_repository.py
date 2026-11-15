@@ -97,11 +97,18 @@ class FirestoreRepository:
         snap = self._col(collection).document(doc_id).get()
         return snap.to_dict() if snap.exists else None
 
+    @staticmethod
+    def _data(snapshot: Any) -> dict[str, Any]:
+        """Document data; queries only return existing documents, so it is never None."""
+        data = snapshot.to_dict()
+        assert data is not None
+        return data
+
     def _where(self, collection: str, *filters: FieldFilter) -> list[dict[str, Any]]:
         query: Any = self._col(collection)
         for f in filters:
             query = query.where(filter=f)
-        return [snap.to_dict() for snap in query.stream()]
+        return [self._data(snap) for snap in query.stream()]
 
     def _audit_write(self, tx: firestore.Transaction, event: AuditEvent) -> None:
         tx.create(self._col(AUDIT_EVENTS).document(), rec.audit_to_record(event))
@@ -137,7 +144,7 @@ class FirestoreRepository:
         return self.get_circle(pointer["circle_id"]) if pointer else None
 
     def list_circles(self) -> list[Circle]:
-        return [rec.record_to_circle(r) for r in (s.to_dict() for s in self._col(CIRCLES).stream())]
+        return [rec.record_to_circle(self._data(s)) for s in self._col(CIRCLES).stream()]
 
     def update_circle_policy(
         self, circle_id: str, policy: EscalationPolicy, audit: AuditEvent
@@ -151,6 +158,15 @@ class FirestoreRepository:
                     "close_after_minutes": policy.close_after_minutes,
                 },
             )
+            self._audit_write(tx, audit)
+
+        self._run(work)
+
+    def update_decision_maker(
+        self, circle_id: str, member_id: str | None, audit: AuditEvent
+    ) -> None:
+        def work(tx: firestore.Transaction) -> None:
+            tx.update(self._col(CIRCLES).document(circle_id), {"decision_maker_id": member_id})
             self._audit_write(tx, audit)
 
         self._run(work)
@@ -267,7 +283,7 @@ class FirestoreRepository:
                     snap = self._col(collection).document(entity.id).get(transaction=tx)
                     if not snap.exists or snap.get("version") != expected_version:
                         raise ConcurrencyConflict()
-            doses_to_cancel = []
+            doses_to_cancel: list[Any] = []
             for medication_id, after in changes.cancel_future_doses:
                 query = (
                     self._col(DOSES)
@@ -481,7 +497,7 @@ class FirestoreRepository:
             .order_by("created_at", direction=firestore.Query.DESCENDING)
             .limit(limit)
         )
-        return [rec.record_to_notification(s.to_dict()) for s in query.stream()]
+        return [rec.record_to_notification(self._data(s)) for s in query.stream()]
 
     # --- Audit -------------------------------------------------------------------
 
@@ -492,4 +508,4 @@ class FirestoreRepository:
             .order_by("created_at", direction=firestore.Query.DESCENDING)
             .limit(limit)
         )
-        return [rec.record_to_audit(s.to_dict(), s.id) for s in query.stream()]
+        return [rec.record_to_audit(self._data(s), s.id) for s in query.stream()]

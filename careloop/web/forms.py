@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable
+from datetime import date, datetime
+from typing import Any
 
 from starlette.datastructures import FormData
 
-from careloop.domain.models import Appointment, AppointmentDetails, Medication, MedicationDetails
-from careloop.domain.validation import validate_appointment_input, validate_medication_input
+from careloop.domain.errors import ValidationFailed
+from careloop.domain.models import (
+    Advice,
+    Appointment,
+    AppointmentDetails,
+    Medication,
+    MedicationDetails,
+)
+from careloop.domain.validation import (
+    validate_advice,
+    validate_appointment_input,
+    validate_medication_input,
+)
 from careloop.web.rendering import local_datetime
 
 TIME_FIELDS = ("time_1", "time_2", "time_3", "time_4")
@@ -66,3 +79,28 @@ def appointment_to_values(appointment: Appointment, tz_name: str) -> dict[str, s
         "time": local_datetime(d.starts_at, tz_name, "%H:%M"),
         "notes": d.notes,
     }
+
+
+def advice_from_form(form: FormData, today: date) -> Advice:
+    """Who advised a suggested change (only asked of caretakers and family)."""
+    return validate_advice(
+        str(form.get("advice_source", "")),
+        str(form.get("advised_by", "")),
+        str(form.get("advised_on", "")),
+        today=today,
+    )
+
+
+def collect_errors(*checks: Callable[[], Any]) -> list[Any]:
+    """Run every validator and return their results, or raise one
+    ValidationFailed listing every field error at once."""
+    errors: dict[str, str] = {}
+    results: list[Any] = []
+    for check in checks:
+        try:
+            results.append(check())
+        except ValidationFailed as exc:
+            errors.update(exc.field_errors)
+    if errors:
+        raise ValidationFailed(errors)
+    return results

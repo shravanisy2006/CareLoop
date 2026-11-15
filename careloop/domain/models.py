@@ -82,6 +82,14 @@ APPOINTMENT_PROPOSAL_KINDS = frozenset(
 )
 
 
+class AdviceSource(str, Enum):
+    """Where a suggested change came from, shown to whoever decides on it."""
+
+    DOCTOR = "doctor"
+    PHARMACIST = "pharmacist"
+    CARE_TEAM = "care_team"  # the caretaker's or family member's own idea
+
+
 class ProposalStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -125,7 +133,12 @@ class EscalationPolicy:
 
 @dataclass(frozen=True)
 class Circle:
-    """One elder's care circle: the elder plus the people helping them."""
+    """One elder's care circle: the elder plus the people helping them.
+
+    `decision_maker_id` is the helper the elder has trusted to approve or
+    decline changes on their behalf (for example when the elder is unwell).
+    It is None unless the elder chooses someone, and the elder can remove it.
+    """
 
     id: str
     code: str
@@ -133,6 +146,7 @@ class Circle:
     timezone: str
     policy: EscalationPolicy
     created_at: datetime
+    decision_maker_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +275,15 @@ class Dose:
 
 
 @dataclass(frozen=True)
+class Advice:
+    """Who advised a suggested change, and when."""
+
+    source: AdviceSource
+    advised_by: str = ""
+    advised_on: date | None = None
+
+
+@dataclass(frozen=True)
 class Proposal:
     """A suggested change from a caretaker or family member. It changes
     nothing until the elder approves it."""
@@ -280,6 +303,7 @@ class Proposal:
     decided_by: str | None = None
     decided_at: datetime | None = None
     decision_note: str = ""
+    advice: Advice = field(default_factory=lambda: Advice(AdviceSource.CARE_TEAM))
 
     def payload_dict(self) -> dict[str, Any]:
         if self.medication_details is not None:

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS circles (
     family_after_minutes     INTEGER NOT NULL,
     close_after_minutes      INTEGER NOT NULL CHECK (close_after_minutes <= 720),
     created_at               TEXT NOT NULL,
+    decision_maker_id        TEXT,
     CHECK (family_after_minutes > caretaker_after_minutes),
     CHECK (close_after_minutes > family_after_minutes)
 );
@@ -104,7 +105,11 @@ CREATE TABLE IF NOT EXISTS proposals (
     created_at        TEXT NOT NULL,
     decided_by        TEXT REFERENCES members(id),
     decided_at        TEXT,
-    decision_note     TEXT NOT NULL DEFAULT ''
+    decision_note     TEXT NOT NULL DEFAULT '',
+    advice_source     TEXT NOT NULL DEFAULT 'care_team'
+                      CHECK (advice_source IN ('doctor', 'pharmacist', 'care_team')),
+    advised_by        TEXT NOT NULL DEFAULT '',
+    advised_on        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_proposals_circle ON proposals(circle_id, status, created_at);
 

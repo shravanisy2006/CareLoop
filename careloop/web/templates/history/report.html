@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Doctor visit summary{% endblock %}
+{% block content %}
+<h1>Doctor visit summary: {{ viewer.circle.elder_name }}</h1>
+<nav aria-label="History pages" class="sub-nav no-print">
+  <ul>
+    <li><a href="/history">Doses</a></li>
+    <li><a href="/report" aria-current="page">Doctor visit summary</a></li>
+    <li><a href="/activity">Activity log</a></li>
+    <li><a href="/notifications">Emails</a></li>
+  </ul>
+</nav>
+<p class="lead">Last {{ days }} days, up to {{ now|local_datetime(viewer.circle.timezone) }}.
+  Take this to the appointment, or print it with your browser's Print command (Ctrl+P).</p>
+<form method="get" action="/report" class="inline-filter no-print">
+  <label for="days">Period</label>
+  <select id="days" name="days">
+    {% for n in (7, 30, 90) %}<option value="{{ n }}"{% if n == days %} selected{% endif %}>Last {{ n }} days</option>{% endfor %}
+  </select>
+  <button type="submit" class="button button-secondary">Show</button>
+</form>
+
+<section aria-labelledby="meds-title">
+  <h2 id="meds-title">Medicines and how they were taken</h2>
+  {% if rows %}
+  <table class="data-table report-table">
+    <caption class="visually-hidden">Doses per medicine in the last {{ days }} days</caption>
+    <thead>
+      <tr>
+        <th scope="col">Medicine</th>
+        <th scope="col">Dose and times</th>
+        <th scope="col">Taken</th>
+        <th scope="col">Skipped</th>
+        <th scope="col">No answer recorded</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for medication, summary in rows %}
+    <tr>
+      <th scope="row">{{ medication.details.name }}{% if medication.status.value == "stopped" %} (stopped){% endif %}</th>
+      <td>{{ medication.details.dosage }}, at {{ medication.details.times|join(", ") }}</td>
+      <td>{{ summary.taken }}{% if summary.taken %} ({{ summary.taken_on_time }} on time){% endif %}</td>
+      <td>{{ summary.skipped }}</td>
+      <td>{{ summary.unconfirmed }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p>No medicines recorded.</p>{% endif %}
+  {% set adherence = overall %}
+  {% include "partials/adherence.html" %}
+</section>
+
+<section aria-labelledby="changes-title">
+  <h2 id="changes-title">Changes approved in this period</h2>
+  {% if approved %}
+  <ul>
+    {% for p in approved %}
+    <li>{{ p.decided_at|local_datetime(viewer.circle.timezone, "%d %b %Y") }}: {{ PROPOSAL_KIND_LABELS[p.kind] }}{% if p.medication_details %} ({{ p.medication_details.name }}){% endif %}
+      - advised by {{ ADVICE_SOURCE_LABELS[p.advice.source]|lower }}{% if p.advice.advised_by %} ({{ p.advice.advised_by }}){% endif %},
+      approved by {{ names.get(p.decided_by, "someone") }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p>No changes were approved in this period.</p>{% endif %}
+</section>
+
+<section aria-labelledby="appts-title">
+  <h2 id="appts-title">Coming appointments</h2>
+  {% set appointments = upcoming %}
+  {% include "partials/appointment_summary.html" %}
+</section>
+
+<p class="hint">Recorded by the care circle in CareLoop. "No answer recorded" means nobody confirmed
+  the dose; it does not show whether it was taken. CareLoop does not give medical advice.</p>
+{% endblock %}

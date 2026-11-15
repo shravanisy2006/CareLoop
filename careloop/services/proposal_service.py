@@ -1,8 +1,10 @@
 """Consent-based change management.
 
-Caretakers and family propose; the elder decides. A proposal is stored on its
-own and the active record is untouched until approval, at which point the
-proposal status and the record change are written in one transaction.
+Caretakers and family propose; the elder decides - or the one helper the elder
+has trusted to decide on their behalf, and never on their own suggestion. A
+proposal is stored on its own and the active record is untouched until
+approval, at which point the proposal status and the record change are written
+in one transaction.
 """
 
 from __future__ import annotations
@@ -11,9 +13,13 @@ from careloop.domain import changes
 from careloop.domain.errors import NotFound, PermissionDenied, ValidationFailed
 from careloop.domain.models import (
     APPOINTMENT_PROPOSAL_KINDS,
+    Advice,
+    AdviceSource,
+    Appointment,
     AppointmentDetails,
     AppointmentStatus,
     ChangeSet,
+    Circle,
     Medication,
     MedicationDetails,
     MedicationStatus,
@@ -23,7 +29,8 @@ from careloop.domain.models import (
     ProposalStatus,
     Role,
 )
-from careloop.domain.permissions import Action, authorize
+from careloop.domain.permissions import Action, authorize, authorize_decision
+from careloop.domain.proposal_summary import summarise_proposal
 from careloop.domain.validation import validate_reason
 from careloop.notifications.messages import proposal_notifications
 from careloop.services.context import ServiceContext
@@ -44,20 +51,39 @@ class ProposalService:
         self._ctx = ctx
         self._doses = doses
 
-    def _target(self, proposal_kind: ProposalKind, target_id: str | None, circle_id: str):
-        if proposal_kind not in NEEDS_TARGET:
+    # --- Helpers -------------------------------------------------------------
+
+    def _circle(self, member: Member) -> Circle:
+        circle = self._ctx.repo.get_circle(member.circle_id)
+        if circle is None:
+            raise NotFound()
+        return circle
+
+    def _target(
+        self, kind: ProposalKind, target_id: str | None, circle_id: str
+    ) -> Medication | Appointment | None:
+        if kind not in NEEDS_TARGET:
             return None
         if not target_id:
             raise NotFound()
         repo = self._ctx.repo
-        target = (
+        target: Medication | Appointment | None = (
             repo.get_appointment(target_id)
-            if proposal_kind in APPOINTMENT_PROPOSAL_KINDS
+            if kind in APPOINTMENT_PROPOSAL_KINDS
             else repo.get_medication(target_id)
         )
         if target is None or target.circle_id != circle_id:
             raise NotFound()
         return target
+
+    @staticmethod
+    def _check_target_is_open(target: Medication | Appointment | None) -> None:
+        if isinstance(target, Medication) and target.status is not MedicationStatus.ACTIVE:
+            raise ValidationFailed({"target": "That medicine has already been stopped."})
+        if isinstance(target, Appointment) and target.status is not AppointmentStatus.SCHEDULED:
+            raise ValidationFailed({"target": "That appointment has already been cancelled."})
+
+    # --- Proposing -------------------------------------------------------------
 
     def propose(
         self,
@@ -68,22 +94,15 @@ class ProposalService:
         medication_details: MedicationDetails | None = None,
         appointment_details: AppointmentDetails | None = None,
         reason: str = "",
+        advice: Advice | None = None,
     ) -> Proposal:
         authorize(proposer, Action.CREATE_PROPOSAL, proposer.circle_id)
         if kind in NEEDS_MEDICATION_DETAILS and medication_details is None:
             raise ValidationFailed({"name": "Please fill in the medicine details."})
         if kind in NEEDS_APPOINTMENT_DETAILS and appointment_details is None:
             raise ValidationFailed({"doctor_name": "Please fill in the appointment details."})
-
         target = self._target(kind, target_id, proposer.circle_id)
-        if isinstance(target, Medication) and target.status is not MedicationStatus.ACTIVE:
-            raise ValidationFailed({"target": "That medicine has already been stopped."})
-        if (
-            target is not None
-            and not isinstance(target, Medication)
-            and (target.status is not AppointmentStatus.SCHEDULED)
-        ):
-            raise ValidationFailed({"target": "That appointment has already been cancelled."})
+        self._check_target_is_open(target)
 
         now = self._ctx.clock.now()
         proposal = Proposal(
@@ -99,17 +118,28 @@ class ProposalService:
             proposed_by=proposer.id,
             proposed_by_role=proposer.role,
             created_at=now,
+            advice=advice or Advice(AdviceSource.CARE_TEAM),
         )
-        circle = self._ctx.repo.get_circle(proposer.circle_id)
-        assert circle is not None
-        elders = [
-            m for m in self._ctx.repo.list_members(circle.id) if m.role is Role.ELDER and m.active
+        circle = self._circle(proposer)
+        deciders = [
+            m
+            for m in self._ctx.repo.list_members(circle.id)
+            if m.active
+            and m.id != proposer.id
+            and (m.role is Role.ELDER or m.id == circle.decision_maker_id)
         ]
+        summary = summarise_proposal(proposal, target, proposer.display_name, circle.timezone)
         self._ctx.repo.apply_changeset(
             ChangeSet(
                 proposals=[(proposal, None)],
                 notifications=proposal_notifications(
-                    circle, proposal, proposer, elders, self._ctx.settings.public_url, now
+                    circle,
+                    proposal,
+                    proposer,
+                    deciders,
+                    summary,
+                    self._ctx.settings.public_url,
+                    now,
                 ),
                 audit_events=[
                     changes.audit_event(
@@ -123,12 +153,16 @@ class ProposalService:
                             "target_id": proposal.target_id,
                             "proposed": proposal.payload_dict(),
                             "reason": proposal.reason,
+                            "advice_source": proposal.advice.source.value,
+                            "advised_by": proposal.advice.advised_by,
                         },
                     )
                 ],
             )
         )
         return proposal
+
+    # --- Reading ---------------------------------------------------------------
 
     def get(self, viewer: Member, proposal_id: str) -> Proposal:
         proposal = self._ctx.repo.get_proposal(proposal_id)
@@ -141,33 +175,43 @@ class ProposalService:
         authorize(viewer, Action.VIEW_CIRCLE, viewer.circle_id)
         return self._ctx.repo.list_proposals(viewer.circle_id, status)
 
-    def current_target(self, viewer: Member, proposal: Proposal):
+    def current_target(self, viewer: Member, proposal: Proposal) -> Medication | Appointment | None:
         """The record a change/stop/cancel proposal points at, for side-by-side review."""
         if proposal.target_id is None:
             return None
         return self._target(proposal.kind, proposal.target_id, viewer.circle_id)
 
-    def approve(self, elder: Member, proposal_id: str, note: str = "") -> None:
-        proposal = self.get(elder, proposal_id)
-        authorize(elder, Action.DECIDE_PROPOSAL, proposal.circle_id)
-        target = self.current_target(elder, proposal)
+    def summary(self, viewer: Member, proposal: Proposal) -> str:
+        """Plain-language description of a proposal, including who advised it."""
+        circle = self._circle(viewer)
+        proposer = self._ctx.repo.get_member(proposal.proposed_by)
+        name = proposer.display_name if proposer else "Someone"
+        return summarise_proposal(
+            proposal, self.current_target(viewer, proposal), name, circle.timezone
+        )
+
+    # --- Deciding --------------------------------------------------------------
+
+    def approve(self, decider: Member, proposal_id: str, note: str = "") -> None:
+        proposal = self.get(decider, proposal_id)
+        circle = self._circle(decider)
+        authorize_decision(decider, circle, proposal)
+        target = self.current_target(decider, proposal)
         now = self._ctx.clock.now()
         change_set = changes.approve_proposal(
-            elder, proposal, target, now, self._ctx.id_factory, validate_reason(note)
+            decider, proposal, target, now, self._ctx.id_factory, validate_reason(note)
         )
         self._ctx.repo.apply_changeset(change_set)
-        circle = self._ctx.repo.get_circle(elder.circle_id)
-        assert circle is not None
         for medication, _ in change_set.medications:
             saved = self._ctx.repo.get_medication(medication.id)
             if saved is not None:
                 self._doses.generate_for_medication(circle, saved, now)
 
-    def reject(self, elder: Member, proposal_id: str, note: str = "") -> None:
-        proposal = self.get(elder, proposal_id)
-        authorize(elder, Action.DECIDE_PROPOSAL, proposal.circle_id)
+    def reject(self, decider: Member, proposal_id: str, note: str = "") -> None:
+        proposal = self.get(decider, proposal_id)
+        authorize_decision(decider, self._circle(decider), proposal)
         self._ctx.repo.apply_changeset(
-            changes.reject_proposal(elder, proposal, self._ctx.clock.now(), validate_reason(note))
+            changes.reject_proposal(decider, proposal, self._ctx.clock.now(), validate_reason(note))
         )
 
     def withdraw(self, proposer: Member, proposal_id: str) -> None:

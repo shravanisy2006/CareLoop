@@ -46,6 +46,12 @@ class Repository(Protocol):
         self, circle_id: str, policy: EscalationPolicy, audit: AuditEvent
     ) -> None: ...
 
+    def update_decision_maker(
+        self, circle_id: str, member_id: str | None, audit: AuditEvent
+    ) -> None:
+        """Set (or clear, with None) the elder's trusted decision-maker."""
+        ...
+
     def add_member(self, member: Member, audit: AuditEvent) -> None:
         """Raises ValidationFailed if the name is already used in the circle."""
         ...

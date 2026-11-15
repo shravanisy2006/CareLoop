@@ -164,6 +164,35 @@ class CircleService:
             before={"display_name": member.display_name, "role": member.role.value},
         )
         self._ctx.repo.deactivate_member(member.id, audit)
+        if self.get_circle(elder).decision_maker_id == member.id:
+            self.set_decision_maker(elder, None)
+
+    def set_decision_maker(self, elder: Member, member_id: str | None) -> Circle:
+        """Let the elder trust one helper to approve or decline changes on their
+        behalf, or (with None) take that trust back."""
+        authorize(elder, Action.MANAGE_MEMBERS, elder.circle_id)
+        circle = self.get_circle(elder)
+        chosen: Member | None = None
+        if member_id is not None:
+            chosen = self._ctx.repo.get_member(member_id)
+            if chosen is None or chosen.circle_id != elder.circle_id or not chosen.active:
+                raise NotFound()
+            if chosen.role is Role.ELDER:
+                raise InvalidStateTransition("You already decide for yourself.")
+        if circle.decision_maker_id == member_id:
+            return circle
+        names = {m.id: m.display_name for m in self._ctx.repo.list_members(circle.id)}
+        audit = audit_event(
+            elder,
+            "settings.decision_maker_changed",
+            "circle",
+            circle.id,
+            self._ctx.clock.now(),
+            before={"decision_maker": names.get(circle.decision_maker_id or "")},
+            after={"decision_maker": chosen.display_name if chosen else None},
+        )
+        self._ctx.repo.update_decision_maker(circle.id, member_id, audit)
+        return self.get_circle(elder)
 
     def update_policy(self, elder: Member, *, caretaker: str, family: str, close: str) -> Circle:
         authorize(elder, Action.CHANGE_SETTINGS, elder.circle_id)

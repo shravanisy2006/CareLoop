@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from careloop.config import load_settings  # noqa: E402
-from careloop.domain.models import ProposalKind  # noqa: E402
+from careloop.domain.models import Advice, AdviceSource, ProposalKind  # noqa: E402
 from careloop.domain.validation import (  # noqa: E402
     validate_appointment_input,
     validate_medication_input,
@@ -113,7 +113,8 @@ def main() -> None:
             start_date=today.isoformat(),
             end_date="",
         ),
-        reason="The doctor suggested taking it after breakfast.",
+        reason="Taking it after breakfast should stop the dizziness.",
+        advice=Advice(AdviceSource.DOCTOR, "Dr. Shah", today - timedelta(days=1)),
     )
 
     print(f"Demo care circle created. Circle code: {format_circle_code(circle.code)}")

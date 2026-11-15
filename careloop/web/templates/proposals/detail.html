@@ -4,9 +4,14 @@
 {% block content %}
 <h1>{{ PROPOSAL_KIND_LABELS[proposal.kind] }}</h1>
 <p><span class="badge badge-{{ proposal.status.value }}">{{ PROPOSAL_STATUS_LABELS[proposal.status] }}</span></p>
+<section class="summary-box" aria-labelledby="summary-title">
+  <h2 id="summary-title">In short</h2>
+  <p class="summary-text">{{ summary }}</p>
+</section>
 <dl class="detail-list">
   <div><dt>Suggested by</dt><dd>{{ names.get(proposal.proposed_by, "someone") }} ({{ ROLE_LABELS[proposal.proposed_by_role] }})</dd></div>
   <div><dt>When</dt><dd>{{ proposal.created_at|local_datetime(viewer.circle.timezone) }}</dd></div>
+  <div><dt>Who advised it</dt><dd>{{ ADVICE_SOURCE_LABELS[proposal.advice.source] }}{% if proposal.advice.advised_by %}: {{ proposal.advice.advised_by }}{% endif %}{% if proposal.advice.advised_on %}, {{ proposal.advice.advised_on.strftime("%d %b %Y") }}{% endif %}</dd></div>
   <div><dt>Reason given</dt><dd>{{ proposal.reason or "No reason given" }}</dd></div>
   {% if proposal.decided_at %}<div><dt>Decided</dt><dd>{{ proposal.decided_at|local_datetime(viewer.circle.timezone) }}{% if proposal.decision_note %} - "{{ proposal.decision_note }}"{% endif %}</dd></div>{% endif %}
 </dl>
@@ -52,9 +57,12 @@
 {% endif %}
 
 {% if proposal.status == ProposalStatus.PENDING %}
-  {% if can(viewer.member, Action.DECIDE_PROPOSAL) %}
+  {% if can_decide_proposals(viewer.member, viewer.circle) and proposal.proposed_by != viewer.member.id %}
   <section aria-labelledby="decide-title" class="decision-box">
     <h2 id="decide-title">Your decision</h2>
+    {% if viewer.member.role != Role.ELDER %}
+    <p>{{ viewer.circle.elder_name }} has trusted you to decide on their behalf. Your decision will be recorded as made for them.</p>
+    {% endif %}
     <div class="decision-grid">
       <form method="post" action="/proposals/{{ proposal.id }}/approve" class="stack-form">
         {{ csrf(request) }}
@@ -69,6 +77,7 @@
     </div>
   </section>
   {% elif proposal.proposed_by == viewer.member.id %}
+  <p>You suggested this, so someone else must decide on it.</p>
   <form method="post" action="/proposals/{{ proposal.id }}/withdraw">
     {{ csrf(request) }}
     <button type="submit" class="button button-secondary">Withdraw my request</button>

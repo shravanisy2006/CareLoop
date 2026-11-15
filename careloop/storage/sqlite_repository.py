@@ -88,6 +88,27 @@ class SqliteRepository:
         with self._read() as conn:
             conn.execute("PRAGMA journal_mode = WAL")
             conn.executescript(schema)
+            self._add_missing_columns(conn)
+
+    #: Columns added after the first release, so existing databases are upgraded
+    #: in place. Each entry is (table, column, column definition).
+    ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+        ("circles", "decision_maker_id", "TEXT"),
+        (
+            "proposals",
+            "advice_source",
+            "TEXT NOT NULL DEFAULT 'care_team' "
+            "CHECK (advice_source IN ('doctor', 'pharmacist', 'care_team'))",
+        ),
+        ("proposals", "advised_by", "TEXT NOT NULL DEFAULT ''"),
+        ("proposals", "advised_on", "TEXT"),
+    )
+
+    def _add_missing_columns(self, conn: sqlite3.Connection) -> None:
+        for table, column, definition in self.ADDED_COLUMNS:
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     @staticmethod
     def _audit(conn: sqlite3.Connection, event: AuditEvent) -> None:
@@ -132,6 +153,15 @@ class SqliteRepository:
                     policy.close_after_minutes,
                     circle_id,
                 ),
+            )
+            self._audit(conn, audit)
+
+    def update_decision_maker(
+        self, circle_id: str, member_id: str | None, audit: AuditEvent
+    ) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "UPDATE circles SET decision_maker_id = ? WHERE id = ?", (member_id, circle_id)
             )
             self._audit(conn, audit)
 

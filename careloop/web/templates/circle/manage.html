@@ -31,6 +31,35 @@
   </table>
 </section>
 
+{% set helpers = members|rejectattr("role", "equalto", Role.ELDER)|list %}
+{% set decider = members|selectattr("id", "equalto", viewer.circle.decision_maker_id)|first %}
+<section aria-labelledby="decider-title">
+  <h2 id="decider-title">Trusted decision-maker</h2>
+  <p>{% if decider %}<strong>{{ decider.display_name }}</strong> can approve or decline suggested changes on {{ viewer.circle.elder_name }}'s behalf.{% else %}Nobody. Only {{ viewer.circle.elder_name }} can approve or decline suggested changes.{% endif %}</p>
+  {% if is_elder %}
+  <p class="hint">Choose someone you trust to decide when you cannot - for example if you are unwell.
+    They can never approve a change they suggested themselves, every decision they make is
+    recorded as made on your behalf, and you can take this back at any time.</p>
+  {% if helpers %}
+  <form method="post" action="/circle/decision-maker" class="stack-form">
+    {{ csrf(request) }}
+    <div class="field">
+      <label for="field-decision_maker">Who can decide for you?</label>
+      <select id="field-decision_maker" name="member_id">
+        <option value="">Nobody - only I decide</option>
+        {% for m in helpers %}
+        <option value="{{ m.id }}"{% if decider and decider.id == m.id %} selected{% endif %}>{{ m.display_name }} ({{ ROLE_LABELS[m.role] }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="button button-primary">Save</button>
+  </form>
+  {% else %}
+  <p>Add a helper first.</p>
+  {% endif %}
+  {% endif %}
+</section>
+
 {% if is_elder %}
 <section aria-labelledby="add-title">
   <h2 id="add-title">Add a helper</h2>

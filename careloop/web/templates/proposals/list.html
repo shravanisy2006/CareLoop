@@ -9,7 +9,8 @@
   {% for p in pending %}
   <li class="request-row">
     <a href="/proposals/{{ p.id }}" class="request-link">{{ PROPOSAL_KIND_LABELS[p.kind] }}{% if p.medication_details %}: {{ p.medication_details.name }}{% elif p.appointment_details %}: {{ p.appointment_details.doctor_name }}{% endif %}</a>
-    <span>Suggested by {{ names.get(p.proposed_by, "someone") }}, {{ p.created_at|local_datetime(viewer.circle.timezone) }}</span>
+    <span>{{ summaries[p.id] }}</span>
+    <span class="hint">Suggested {{ p.created_at|local_datetime(viewer.circle.timezone) }}</span>
   </li>
   {% endfor %}
 </ul>

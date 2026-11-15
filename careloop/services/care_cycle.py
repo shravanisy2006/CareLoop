@@ -83,19 +83,23 @@ class CareCycle:
             report.doses_created += self._doses.generate_for_circle(circle, now)
 
         for dose in repo.list_open_doses_due_by(now):
-            circle = circles.get(dose.circle_id)
-            if circle is not None:
-                self._escalate(circle, dose, members[circle.id], report, now)
+            dose_circle = circles.get(dose.circle_id)
+            if dose_circle is not None:
+                self._escalate(dose_circle, dose, members[dose_circle.id], report, now)
 
         for appointment in repo.list_appointments_starting_between(
             now, now + APPOINTMENT_REMINDER_LEAD
         ):
-            circle = circles.get(appointment.circle_id)
-            if circle is None:
+            visit_circle = circles.get(appointment.circle_id)
+            if visit_circle is None:
                 continue
             report.appointment_reminders_queued += repo.enqueue_notifications(
                 appointment_notifications(
-                    circle, appointment, members[circle.id], self._ctx.settings.public_url, now
+                    visit_circle,
+                    appointment,
+                    members[visit_circle.id],
+                    self._ctx.settings.public_url,
+                    now,
                 )
             )
 
