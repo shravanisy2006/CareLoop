@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CareLoop{% endblock %} - CareLoop</title>
+  <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', path='careloop.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="/">CareLoop<span class="tagline">Care that never loses track</span></a>
+      {% if viewer %}
+      <p class="signed-in">Signed in as <strong>{{ viewer.member.display_name }}</strong>
+        ({{ ROLE_LABELS[viewer.member.role] }})</p>
+      {% endif %}
+    </div>
+    {% if viewer %}
+    <nav class="wrap main-nav" aria-label="Main">
+      <ul>
+        {% set links = [
+          ("/", "Today"),
+          ("/medications", "Medicines"),
+          ("/appointments", "Appointments"),
+          ("/proposals", "Requests"),
+          ("/history", "History"),
+          ("/circle", "People & settings"),
+        ] %}
+        {% for href, label in links %}
+        {% set current = request.url.path == href or (href != "/" and request.url.path.startswith(href)) %}
+        <li><a href="{{ href }}"{% if current %} aria-current="page"{% endif %}>{{ label }}</a></li>
+        {% endfor %}
+        <li>
+          <form method="post" action="/logout" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <button type="submit" class="link-button">Sign out</button>
+          </form>
+        </li>
+      </ul>
+    </nav>
+    {% endif %}
+  </header>
+
+  <main id="main" class="wrap" tabindex="-1">
+    <div class="flash-region" role="status" aria-live="polite">
+      {% for message in flashes %}
+      <p class="flash flash-{{ message.kind }}">{{ message.text }}</p>
+      {% endfor %}
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>CareLoop records what the care circle enters. It does not give medical advice
+      or change any dose. Always follow your doctor's instructions.</p>
+  </footer>
+</body>
+</html>

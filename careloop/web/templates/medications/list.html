@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Medicines{% endblock %}
+{% block content %}
+<h1>Medicines</h1>
+<p><a class="button button-primary" href="/medications/new">
+  {% if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}Add a medicine{% else %}Suggest a new medicine{% endif %}</a></p>
+{% if medications %}
+<table class="data-table">
+  <caption class="visually-hidden">All medicines in this care circle</caption>
+  <thead><tr><th scope="col">Medicine</th><th scope="col">Dose</th><th scope="col">Times</th><th scope="col">Status</th></tr></thead>
+  <tbody>
+  {% for m in medications %}
+    <tr>
+      <th scope="row"><a href="/medications/{{ m.id }}">{{ m.details.name }}</a></th>
+      <td>{{ m.details.dosage }}</td>
+      <td>{{ m.details.times|join(", ") }}</td>
+      <td><span class="badge badge-{{ m.status.value }}">{{ "In use" if m.status.value == "active" else "Stopped" }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No medicines yet.</p>
+{% endif %}
+{% endblock %}

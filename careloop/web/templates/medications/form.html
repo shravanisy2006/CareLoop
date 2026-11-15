@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field, textarea, error_summary, csrf %}
+{% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
+{% block title %}{% if medication %}Change {{ medication.details.name }}{% else %}New medicine{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if medication %}{% if direct %}Change{% else %}Suggest a change to{% endif %} {{ medication.details.name }}{% else %}{% if direct %}Add a medicine{% else %}Suggest a new medicine{% endif %}{% endif %}</h1>
+{% if not direct %}
+<p class="lead">This will be sent to {{ viewer.circle.elder_name }}. Nothing changes until they approve it.</p>
+{% endif %}
+<p>Enter the medicine exactly as the doctor or pharmacist prescribed it. CareLoop never changes a dose.</p>
+{{ error_summary(errors) }}
+<form method="post" action="{% if medication %}/medications/{{ medication.id }}/edit{% else %}/medications{% endif %}" class="stack-form" novalidate>
+  {{ csrf(request) }}
+  {{ field("name", "Medicine name", values, errors, required=true, maxlength=100) }}
+  {{ field("dosage", "How much to take", values, errors, hint="For example: 1 tablet (500 mg), or 10 ml.", required=true, maxlength=100) }}
+  {{ textarea("instructions", "Instructions", values, errors, hint="For example: with food.") }}
+  <fieldset class="field{% if errors.get('times') %} field-error{% endif %}" {% if errors.get('times') %}aria-describedby="error-times"{% endif %}>
+    <legend>Times to take it each day</legend>
+    <p class="hint">Fill in one box for each time. Use the 24-hour clock, for example 08:00 or 20:30.</p>
+    {% if errors.get('times') %}<p class="error-message" id="error-times"><span class="visually-hidden">Error:</span> {{ errors.times }}</p>{% endif %}
+    <div class="time-grid" id="field-times">
+      {% for i in range(1, 5) %}
+      <div>
+        <label for="field-time_{{ i }}">Time {{ i }}{% if i > 1 %} <span class="optional">(optional)</span>{% endif %}</label>
+        <input id="field-time_{{ i }}" name="time_{{ i }}" type="time" value="{{ values.get('time_' ~ i, '') }}">
+      </div>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {{ field("start_date", "Start date", values, errors, type="date", required=true) }}
+  {{ field("end_date", "End date", values, errors, type="date", hint="Leave empty if there is no end date.") }}
+  {% if not direct %}{{ textarea("reason", "Why are you suggesting this?", values, errors) }}{% endif %}
+  <div class="action-row">
+    <button type="submit" class="button button-primary">{% if direct %}Save{% else %}Send to {{ viewer.circle.elder_name }} for approval{% endif %}</button>
+    <a href="{% if medication %}/medications/{{ medication.id }}{% else %}/medications{% endif %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

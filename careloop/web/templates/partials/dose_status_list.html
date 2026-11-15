@@ -1,0 +1,14 @@
+<ul class="plain-list">
+  {% for item in items %}
+  {% set d = item.dose %}
+  {% set upcoming = d.status == DoseStatus.SCHEDULED and now is defined and d.scheduled_for > now %}
+  <li class="status-row">
+    <span><strong>{{ item.medication.details.name }}</strong> at {{ d.scheduled_for|local_time(viewer.circle.timezone) }}</span>
+    {% if upcoming %}
+    <span class="badge badge-upcoming">Upcoming</span>
+    {% else %}
+    <span class="badge badge-{{ d.status.value }}">{{ DOSE_STATUS_LABELS[d.status] }}{% if d.resolved_at %} ({{ d.resolved_at|local_time(viewer.circle.timezone) }}){% endif %}</span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>

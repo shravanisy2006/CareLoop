@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field, error_summary, csrf %}
+{% set is_elder = can(viewer.member, Action.MANAGE_MEMBERS) %}
+{% block title %}People & settings{% endblock %}
+{% block content %}
+<h1>People &amp; settings</h1>
+<section class="card code-card" aria-labelledby="code-title">
+  <h2 id="code-title">Care circle code</h2>
+  <p class="circle-code">{{ viewer.circle.code|circle_code }}</p>
+  <p>Everyone signs in with this code, their own name and their own passcode.</p>
+</section>
+
+<section aria-labelledby="people-title">
+  <h2 id="people-title">People in {{ viewer.circle.elder_name }}'s care circle</h2>
+  <table class="data-table">
+    <caption class="visually-hidden">Care circle members</caption>
+    <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Gets emails</th>{% if is_elder %}<th scope="col">Access</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for m in members %}
+    <tr>
+      <th scope="row">{{ m.display_name }}</th>
+      <td>{{ ROLE_LABELS[m.role] }}</td>
+      <td>{{ "Yes" if m.email else "No email address" }}</td>
+      {% if is_elder %}<td>{% if m.role != Role.ELDER %}
+        <form method="post" action="/circle/members/{{ m.id }}/remove">{{ csrf(request) }}
+          <button type="submit" class="button button-danger button-small">Remove<span class="visually-hidden"> {{ m.display_name }}</span></button>
+        </form>{% else %}-{% endif %}</td>{% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if is_elder %}
+<section aria-labelledby="add-title">
+  <h2 id="add-title">Add a helper</h2>
+  {{ error_summary(member_errors) }}
+  <form method="post" action="/circle/members" class="stack-form" novalidate>
+    {{ csrf(request) }}
+    {{ field("display_name", "Their name", member_values, member_errors, required=true, maxlength=60) }}
+    <fieldset class="field{% if member_errors.get('role') %} field-error{% endif %}">
+      <legend>Their role</legend>
+      {% if member_errors.get('role') %}<p class="error-message" id="field-role">{{ member_errors.role }}</p>{% endif %}
+      <div class="radio"><input type="radio" id="role-caretaker" name="role" value="caretaker"{% if member_values.get('role', 'caretaker') == 'caretaker' %} checked{% endif %}>
+        <label for="role-caretaker">Caretaker - told first if a dose is not confirmed, and can record doses for you</label></div>
+      <div class="radio"><input type="radio" id="role-family" name="role" value="family"{% if member_values.get('role') == 'family' %} checked{% endif %}>
+        <label for="role-family">Family member - told if a dose is still not confirmed later on</label></div>
+    </fieldset>
+    {{ field("email", "Their email address", member_values, member_errors, type="email", hint="Alerts are sent here.", autocomplete="off") }}
+    {{ field("passcode", "A passcode for them", {}, member_errors, type="password", hint="At least 6 characters. Tell them in person; they should keep it private.", required=true, autocomplete="new-password") }}
+    <button type="submit" class="button button-primary">Add to my care circle</button>
+  </form>
+</section>
+{% endif %}
+
+<section aria-labelledby="timing-title">
+  <h2 id="timing-title">When helpers are told</h2>
+  <p>{{ viewer.circle.elder_name }} is reminded at each dose time. If nobody records an answer:</p>
+  {% if is_elder %}
+  {{ error_summary(policy_errors) }}
+  <form method="post" action="/circle/settings" class="stack-form" novalidate>
+    {{ csrf(request) }}
+    {{ field("caretaker_after_minutes", "Tell caretakers after (minutes)", policy_values, policy_errors, type="number", inputmode="numeric", required=true) }}
+    {{ field("family_after_minutes", "Tell family after (minutes)", policy_values, policy_errors, type="number", inputmode="numeric", required=true) }}
+    {{ field("close_after_minutes", "Stop following up after (minutes)", policy_values, policy_errors, type="number", inputmode="numeric", hint="After this the dose is marked 'no answer recorded'. Up to 720 minutes.", required=true) }}
+    <button type="submit" class="button button-primary">Save timings</button>
+  </form>
+  {% else %}
+  <ul>
+    <li>Caretakers are told after {{ viewer.circle.policy.caretaker_after_minutes }} minutes.</li>
+    <li>Family is told after {{ viewer.circle.policy.family_after_minutes }} minutes.</li>
+    <li>Follow-up stops after {{ viewer.circle.policy.close_after_minutes }} minutes.</li>
+  </ul>
+  <p>Only {{ viewer.circle.elder_name }} can change these.</p>
+  {% endif %}
+</section>
+{% endblock %}

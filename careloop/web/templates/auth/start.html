@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field, error_summary, csrf %}
+{% block title %}Start a care circle{% endblock %}
+{% block content %}
+<h1>Start your care circle</h1>
+<p class="lead">You will be in charge of this circle. You decide who joins and approve every change.</p>
+{{ error_summary(errors) }}
+<form method="post" action="/start" class="stack-form" novalidate>
+  {{ csrf(request) }}
+  {{ field("elder_name", "Your name", values, errors, required=true, autocomplete="name", maxlength=60) }}
+  {{ field("email", "Your email address", values, errors, type="email", hint="Reminders are sent here. Leave empty if you prefer a helper to get them.", autocomplete="email") }}
+  {{ field("passcode", "Choose a passcode", {}, errors, type="password", hint="At least 6 characters. Avoid 123456 or your birthday.", required=true, autocomplete="new-password") }}
+  {{ field("confirm_passcode", "Type the passcode again", {}, errors, type="password", required=true, autocomplete="new-password") }}
+  <div class="field{% if errors.get('timezone') %} field-error{% endif %}">
+    <label for="field-timezone">Your time zone</label>
+    {% if errors.get('timezone') %}<p class="error-message" id="error-timezone">{{ errors.timezone }}</p>{% endif %}
+    <select id="field-timezone" name="timezone" {% if errors.get('timezone') %}aria-invalid="true" aria-describedby="error-timezone"{% endif %}>
+      {% for tz in timezones %}
+      <option value="{{ tz }}"{% if values.get('timezone') == tz %} selected{% endif %}>{{ tz }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="button button-primary">Create my care circle</button>
+</form>
+{% endblock %}

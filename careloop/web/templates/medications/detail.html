@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import csrf, textarea %}
+{% block title %}{{ medication.details.name }}{% endblock %}
+{% block content %}
+{% set d = medication.details %}
+<h1>{{ d.name }}</h1>
+<dl class="detail-list">
+  <div><dt>Dose</dt><dd>{{ d.dosage }}</dd></div>
+  <div><dt>Times each day</dt><dd>{{ d.times|join(", ") }}</dd></div>
+  <div><dt>Instructions</dt><dd>{{ d.instructions or "None" }}</dd></div>
+  <div><dt>From</dt><dd>{{ d.start_date.strftime("%d %b %Y") }}</dd></div>
+  <div><dt>Until</dt><dd>{{ d.end_date.strftime("%d %b %Y") if d.end_date else "No end date" }}</dd></div>
+  <div><dt>Status</dt><dd>{{ "In use" if medication.status.value == "active" else "Stopped" }}</dd></div>
+  <div><dt>Last changed</dt><dd>{{ medication.updated_at|local_datetime(viewer.circle.timezone) }} (version {{ medication.version }})</dd></div>
+</dl>
+
+{% if pending %}
+<div class="notice-box">
+  <p>{{ pending|length }} suggested change{{ "s" if pending|length > 1 }} to this medicine {{ "is" if pending|length == 1 else "are" }} waiting for a decision.</p>
+  <a href="/proposals/{{ pending[0].id }}">Review</a>
+</div>
+{% endif %}
+
+{% if medication.status.value == "active" %}
+{% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
+<div class="action-row">
+  <a class="button button-secondary" href="/medications/{{ medication.id }}/edit">{% if direct %}Change this medicine{% else %}Suggest a change{% endif %}</a>
+</div>
+<section aria-labelledby="stop-title" class="danger-zone">
+  <h2 id="stop-title">{% if direct %}Stop this medicine{% else %}Suggest stopping this medicine{% endif %}</h2>
+  <p>{% if direct %}Upcoming reminders for it will be cancelled. Past records are kept.{% else %}{{ viewer.circle.elder_name }} will be asked to approve.{% endif %}</p>
+  <form method="post" action="/medications/{{ medication.id }}/stop" class="stack-form">
+    {{ csrf(request) }}
+    {% if not direct %}{{ textarea("reason", "Why should it stop?", {}, {}) }}{% endif %}
+    <button type="submit" class="button button-danger">{% if direct %}Stop {{ d.name }}{% else %}Send request{% endif %}</button>
+  </form>
+</section>
+{% endif %}
+<p><a href="/medications">Back to all medicines</a></p>
+{% endblock %}

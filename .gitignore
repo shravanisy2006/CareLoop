@@ -1,0 +1,28 @@
+# Secrets and local data
+.env
+*.db
+*.db-shm
+*.db-wal
+service-account*.json
+*-credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node (only used for the optional accessibility audit)
+node_modules/
+
+# Firebase emulator logs
+firestore-debug.log
+firebase-debug.log
+
+# Editors
+.vscode/
+.idea/

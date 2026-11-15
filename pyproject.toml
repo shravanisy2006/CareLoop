@@ -1,0 +1,22 @@
+[project]
+name = "careloop"
+version = "1.0.0"
+description = "CareLoop - closed-loop, consent-driven medication care for elders"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:careloop.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101", "B008"]  # B008: FastAPI's Depends() idiom
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]

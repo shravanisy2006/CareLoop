@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+<h1>CareLoop</h1>
+<p class="lead">Every dose followed up until someone answers. Every change decided by the person it affects.</p>
+<div class="choice-grid">
+  <section class="card">
+    <h2>Already in a care circle?</h2>
+    <p>Sign in with your circle code, your name and your passcode.</p>
+    <a class="button button-primary" href="/login">Sign in</a>
+  </section>
+  <section class="card">
+    <h2>New here?</h2>
+    <p>Start a care circle for yourself, then invite the people who help you.</p>
+    <a class="button button-secondary" href="/start">Start a care circle</a>
+  </section>
+</div>
+<section aria-labelledby="how-title" class="how-it-works">
+  <h2 id="how-title">How it works</h2>
+  <ol>
+    <li>At each dose time you get a reminder. Press <strong>"I took it"</strong> when you have.</li>
+    <li>If nobody answers, CareLoop tells your caretaker, then your family, at times you choose.</li>
+    <li>Helpers can suggest changes to medicines or appointments. Nothing changes unless you approve.</li>
+    <li>Everything is recorded, so everyone sees the same honest history.</li>
+  </ol>
+</section>
+{% endblock %}

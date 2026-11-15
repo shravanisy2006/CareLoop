@@ -1,0 +1,12 @@
+{% if appointments %}
+<ul class="plain-list">
+  {% for a in appointments %}
+  <li class="appointment-row">
+    <strong>{{ a.details.starts_at|local_datetime(viewer.circle.timezone) }}</strong><br>
+    {{ a.details.doctor_name }} &middot; {{ a.details.purpose }}{% if a.details.location %} &middot; {{ a.details.location }}{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No upcoming appointments.</p>
+{% endif %}

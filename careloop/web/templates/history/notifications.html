@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Emails{% endblock %}
+{% block content %}
+<h1>Emails</h1>
+<nav aria-label="History pages" class="sub-nav">
+  <ul>
+    <li><a href="/history">Doses</a></li>
+    <li><a href="/activity">Activity log</a></li>
+    <li><a href="/notifications" aria-current="page">Emails</a></li>
+  </ul>
+</nav>
+{% if not email_configured %}
+<div class="notice-box" role="note">
+  <p><strong>Email is not set up on this server.</strong> Reminders are recorded below but not sent.
+    The person running CareLoop needs to add a Gmail address and app password (see README).</p>
+</div>
+{% endif %}
+{% if notifications %}
+<table class="data-table">
+  <caption class="visually-hidden">Emails, newest first</caption>
+  <thead><tr><th scope="col">Queued</th><th scope="col">Type</th><th scope="col">To</th><th scope="col">Result</th><th scope="col">Attempts</th></tr></thead>
+  <tbody>
+  {% for n in notifications %}
+  <tr>
+    <td>{{ n.created_at|local_datetime(viewer.circle.timezone) }}</td>
+    <th scope="row">{{ NOTIFICATION_KIND_LABELS[n.kind] }}</th>
+    <td>{{ names.get(n.recipient_member_id, "former member") }}</td>
+    <td><span class="badge badge-{{ n.status.value }}">{{ NOTIFICATION_STATUS_LABELS[n.status] }}</span>
+      {% if n.sent_at %}<br><small>{{ n.sent_at|local_datetime(viewer.circle.timezone) }}</small>{% endif %}</td>
+    <td>{{ n.attempts }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p>No emails yet.</p>{% endif %}
+{% endblock %}

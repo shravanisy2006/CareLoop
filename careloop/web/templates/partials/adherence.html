@@ -1,0 +1,14 @@
+{# Honest adherence: "no answer" is shown separately, never counted as missed. #}
+<dl class="stat-grid">
+  <div class="stat"><dt>Taken</dt><dd>{{ adherence.taken }}</dd></div>
+  <div class="stat"><dt>Skipped</dt><dd>{{ adherence.skipped }}</dd></div>
+  <div class="stat"><dt>No answer recorded</dt><dd>{{ adherence.unconfirmed }}</dd></div>
+  <div class="stat"><dt>Waiting for an answer</dt><dd>{{ adherence.awaiting_answer }}</dd></div>
+</dl>
+{% if adherence.taken_percent is not none %}
+<p>{{ adherence.taken_percent }}% of finished doses were recorded as taken
+  ({{ adherence.taken_on_time }} on time). {{ adherence.unknown_percent }}% have no answer recorded,
+  which means nobody knows - not that they were missed.</p>
+{% else %}
+<p>No finished doses yet in this period.</p>
+{% endif %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Dose history{% endblock %}
+{% block content %}
+<h1>Dose history</h1>
+<nav aria-label="History pages" class="sub-nav">
+  <ul>
+    <li><a href="/history" aria-current="page">Doses</a></li>
+    <li><a href="/activity">Activity log</a></li>
+    <li><a href="/notifications">Emails</a></li>
+  </ul>
+</nav>
+<form method="get" action="/history" class="inline-filter">
+  <label for="days">Show the last</label>
+  <select id="days" name="days">
+    {% for n in (7, 14, 30, 90) %}<option value="{{ n }}"{% if n == days %} selected{% endif %}>{{ n }} days</option>{% endfor %}
+  </select>
+  <button type="submit" class="button button-secondary">Show</button>
+</form>
+<section aria-labelledby="summary-title">
+  <h2 id="summary-title">Summary</h2>
+  {% include "partials/adherence.html" %}
+</section>
+<section aria-labelledby="list-title">
+  <h2 id="list-title">Every dose</h2>
+  {% if doses %}
+  <table class="data-table">
+    <caption class="visually-hidden">Doses in the last {{ days }} days, newest first</caption>
+    <thead><tr><th scope="col">Scheduled</th><th scope="col">Medicine</th><th scope="col">Result</th><th scope="col">Recorded by</th></tr></thead>
+    <tbody>
+    {% for item in doses %}
+    {% set d = item.dose %}
+    <tr>
+      <td>{{ d.scheduled_for|local_datetime(viewer.circle.timezone) }}</td>
+      <th scope="row">{{ item.medication.details.name }}</th>
+      <td><span class="badge badge-{{ d.status.value }}">{{ DOSE_STATUS_LABELS[d.status] }}</span>
+        {% if d.resolved_at %}<br><small>at {{ d.resolved_at|local_datetime(viewer.circle.timezone) }}</small>{% endif %}</td>
+      <td>{% if d.resolved_by %}{{ names.get(d.resolved_by, "someone") }}{% if d.resolved_by_role and d.resolved_by_role != Role.ELDER %} ({{ ROLE_LABELS[d.resolved_by_role] }}){% endif %}{% else %}-{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p>No doses in this period.</p>{% endif %}
+</section>
+{% endblock %}

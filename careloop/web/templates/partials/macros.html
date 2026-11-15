@@ -1,0 +1,53 @@
+{# Accessible form building blocks. Every field has a visible <label>, hints and
+   errors are tied to the input with aria-describedby, and invalid fields are
+   marked with aria-invalid. #}
+
+{% macro error_summary(errors) %}
+{% if errors %}
+<div class="error-summary" role="alert" aria-labelledby="error-summary-title">
+  <h2 id="error-summary-title">Please fix {{ errors|length }} {{ "problem" if errors|length == 1 else "problems" }}</h2>
+  <ul>
+    {% for field, message in errors.items() %}
+    <li><a href="#field-{{ field }}">{{ message }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro field(name, label, values, errors, type="text", hint="", required=false,
+               autocomplete="", inputmode="", maxlength=0) %}
+{% set error = errors.get(name) %}
+{% set described = [] %}
+{% if hint %}{% set _ = described.append("hint-" ~ name) %}{% endif %}
+{% if error %}{% set _ = described.append("error-" ~ name) %}{% endif %}
+<div class="field{% if error %} field-error{% endif %}">
+  <label for="field-{{ name }}">{{ label }}{% if not required %} <span class="optional">(optional)</span>{% endif %}</label>
+  {% if hint %}<p class="hint" id="hint-{{ name }}">{{ hint }}</p>{% endif %}
+  {% if error %}<p class="error-message" id="error-{{ name }}"><span class="visually-hidden">Error:</span> {{ error }}</p>{% endif %}
+  <input id="field-{{ name }}" name="{{ name }}" type="{{ type }}"
+         value="{{ values.get(name, '') }}"
+         {% if required %}required aria-required="true"{% endif %}
+         {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+         {% if inputmode %}inputmode="{{ inputmode }}"{% endif %}
+         {% if maxlength %}maxlength="{{ maxlength }}"{% endif %}
+         {% if described %}aria-describedby="{{ described|join(' ') }}"{% endif %}
+         {% if error %}aria-invalid="true"{% endif %}>
+</div>
+{% endmacro %}
+
+{% macro textarea(name, label, values, errors, hint="", maxlength=500) %}
+{% set error = errors.get(name) %}
+<div class="field{% if error %} field-error{% endif %}">
+  <label for="field-{{ name }}">{{ label }} <span class="optional">(optional)</span></label>
+  {% if hint %}<p class="hint" id="hint-{{ name }}">{{ hint }}</p>{% endif %}
+  {% if error %}<p class="error-message" id="error-{{ name }}"><span class="visually-hidden">Error:</span> {{ error }}</p>{% endif %}
+  <textarea id="field-{{ name }}" name="{{ name }}" rows="3" maxlength="{{ maxlength }}"
+            {% if hint or error %}aria-describedby="{% if hint %}hint-{{ name }}{% endif %}{% if error %} error-{{ name }}{% endif %}"{% endif %}
+            {% if error %}aria-invalid="true"{% endif %}>{{ values.get(name, '') }}</textarea>
+</div>
+{% endmacro %}
+
+{% macro csrf(request) %}<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">{% endmacro %}
+
+{% macro status_badge(text, tone) %}<span class="badge badge-{{ tone }}">{{ text }}</span>{% endmacro %}

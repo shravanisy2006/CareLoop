@@ -1,0 +1,33 @@
+{# One dose. `can_record` decides whether the answer buttons are shown. #}
+{% from "partials/macros.html" import csrf %}
+{% set d = item.dose %}
+{% set med = item.medication.details %}
+<article class="dose-card{% if d.escalation_level >= 2 %} dose-card-urgent{% endif %}" aria-labelledby="dose-{{ d.id }}-title">
+  <h3 id="dose-{{ d.id }}-title">{{ med.name }}</h3>
+  <p class="dose-meta"><span class="dose-time">{{ d.scheduled_for|local_time(viewer.circle.timezone) }}</span>
+    &middot; {{ med.dosage }}</p>
+  {% if med.instructions %}<p class="dose-instructions">{{ med.instructions }}</p>{% endif %}
+  {% if d.status == DoseStatus.SCHEDULED and d.escalation_level >= 2 %}
+  <p class="dose-alert">Not confirmed yet. {% if d.escalation_level == 2 %}Caretakers have been told.{% else %}Caretakers and family have been told.{% endif %}</p>
+  {% endif %}
+  {% if can_record %}
+  <div class="dose-actions">
+    <form method="post" action="/doses/{{ d.id }}/record">
+      {{ csrf(request) }}
+      <input type="hidden" name="outcome" value="taken">
+      <button type="submit" class="button button-primary button-large">
+        {% if viewer.member.role == Role.ELDER %}I took it{% else %}Record as taken{% endif %}
+        <span class="visually-hidden"> - {{ med.name }} at {{ d.scheduled_for|local_time(viewer.circle.timezone) }}</span>
+      </button>
+    </form>
+    <form method="post" action="/doses/{{ d.id }}/record">
+      {{ csrf(request) }}
+      <input type="hidden" name="outcome" value="skipped">
+      <button type="submit" class="button button-secondary">
+        {% if viewer.member.role == Role.ELDER %}I'm skipping this one{% else %}Record as skipped{% endif %}
+        <span class="visually-hidden"> - {{ med.name }} at {{ d.scheduled_for|local_time(viewer.circle.timezone) }}</span>
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</article>

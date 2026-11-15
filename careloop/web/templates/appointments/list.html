@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import csrf, textarea %}
+{% set direct = can(viewer.member, Action.EDIT_RECORDS_DIRECTLY) %}
+{% block title %}Appointments{% endblock %}
+{% block content %}
+<h1>Doctor appointments</h1>
+<p><a class="button button-primary" href="/appointments/new">{% if direct %}Add an appointment{% else %}Suggest an appointment{% endif %}</a></p>
+<h2>Coming up</h2>
+{% if upcoming %}
+{% for a in upcoming %}
+<article class="card appointment-card" aria-labelledby="appt-{{ a.id }}">
+  <h3 id="appt-{{ a.id }}">{{ a.details.starts_at|local_datetime(viewer.circle.timezone) }}</h3>
+  <dl class="detail-list">
+    <div><dt>Doctor</dt><dd>{{ a.details.doctor_name }}</dd></div>
+    <div><dt>For</dt><dd>{{ a.details.purpose }}</dd></div>
+    <div><dt>Where</dt><dd>{{ a.details.location or "Not given" }}</dd></div>
+    {% if a.details.notes %}<div><dt>Notes</dt><dd>{{ a.details.notes }}</dd></div>{% endif %}
+  </dl>
+  <div class="action-row">
+    <a href="{{ calendar_url(a, viewer.circle.elder_name) }}" rel="noopener noreferrer" target="_blank">Add to Google Calendar<span class="visually-hidden"> (opens in a new tab)</span></a>
+    <a href="/appointments/{{ a.id }}/edit">{% if direct %}Change{% else %}Suggest a change{% endif %}<span class="visually-hidden"> to the appointment on {{ a.details.starts_at|local_datetime(viewer.circle.timezone) }}</span></a>
+  </div>
+  <form method="post" action="/appointments/{{ a.id }}/cancel" class="stack-form">
+    {{ csrf(request) }}
+    {% if not direct %}{{ textarea("reason", "Reason for cancelling", {}, {}) }}{% endif %}
+    <button type="submit" class="button button-danger">{% if direct %}Cancel this appointment{% else %}Suggest cancelling{% endif %}</button>
+  </form>
+</article>
+{% endfor %}
+{% else %}<p>No upcoming appointments.</p>{% endif %}
+
+<h2>Past and cancelled</h2>
+{% if past %}
+<ul class="plain-list">
+  {% for a in past %}
+  <li class="status-row"><span>{{ a.details.starts_at|local_datetime(viewer.circle.timezone) }} &middot; {{ a.details.doctor_name }} &middot; {{ a.details.purpose }}</span>
+    <span class="badge badge-{{ a.status.value }}">{{ "Cancelled" if a.status.value == "cancelled" else "Past" }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}<p>None yet.</p>{% endif %}
+{% endblock %}

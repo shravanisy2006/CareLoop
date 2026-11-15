@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Today{% endblock %}
+{% block content %}
+<h1>Hello, {{ viewer.member.display_name }}</h1>
+
+{% if pending_proposals %}
+<section class="notice-box" aria-labelledby="requests-title">
+  <h2 id="requests-title">{{ pending_proposals|length }} {{ "change needs" if pending_proposals|length == 1 else "changes need" }} your decision</h2>
+  <p>Nothing changes unless you say yes.</p>
+  <a class="button button-primary" href="/proposals">Review {{ "it" if pending_proposals|length == 1 else "them" }}</a>
+</section>
+{% endif %}
+
+<section aria-labelledby="now-title">
+  <h2 id="now-title">Medicines to take now</h2>
+  {% if due_doses %}
+  {% for item in due_doses %}{% set can_record = true %}{% include "partials/dose_card.html" %}{% endfor %}
+  {% else %}
+  <p class="all-clear">Nothing to take right now.</p>
+  {% endif %}
+</section>
+
+<section aria-labelledby="later-title">
+  <h2 id="later-title">Later today</h2>
+  {% if later_doses %}
+  <ul class="plain-list">
+    {% for item in later_doses %}
+    <li class="status-row"><span><strong>{{ item.medication.details.name }}</strong> &middot; {{ item.medication.details.dosage }}</span>
+      <span>{{ item.dose.scheduled_for|local_time(viewer.circle.timezone) }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}<p>No more medicines today.</p>{% endif %}
+</section>
+
+{% if done_doses %}
+<section aria-labelledby="done-title">
+  <h2 id="done-title">Already recorded</h2>
+  {% set items = done_doses %}{% include "partials/dose_status_list.html" %}
+</section>
+{% endif %}
+
+<section aria-labelledby="appointments-title">
+  <h2 id="appointments-title">Coming appointments</h2>
+  {% include "partials/appointment_summary.html" %}
+</section>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Your care circle is ready{% endblock %}
+{% block content %}
+<h1>Your care circle is ready</h1>
+<section class="card code-card" aria-labelledby="code-title">
+  <h2 id="code-title">Your care circle code</h2>
+  <p class="circle-code">{{ circle_code|circle_code }}</p>
+  <p>Write this down. You and your helpers need it to sign in.
+    You can also find it later on the "People &amp; settings" page.</p>
+</section>
+<h2>What to do next</h2>
+<ol class="next-steps">
+  <li><a href="/medications/new">Add your first medicine</a></li>
+  <li><a href="/circle">Add your caretaker and family</a></li>
+  <li><a href="/">Go to today's page</a></li>
+</ol>
+{% endblock %}
