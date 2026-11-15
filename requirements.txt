@@ -4,6 +4,6 @@ uvicorn>=0.30
 jinja2>=3.1
 python-multipart>=0.0.9
 itsdangerous>=2.1
-tzdata>=2024.1
+tzdata>=2026.6
 # Only imported when CARELOOP_STORAGE=firestore.
 google-cloud-firestore>=2.16,<3
