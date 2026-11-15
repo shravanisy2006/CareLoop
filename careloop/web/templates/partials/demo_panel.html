@@ -1,0 +1,24 @@
+{% from "partials/macros.html" import csrf %}
+<section class="card demo-panel" aria-labelledby="demo-title">
+  <h2 id="demo-title">Try the demo</h2>
+  <p>Choose a person to see CareLoop through their eyes. Sample data only.</p>
+  <ul class="demo-people">
+    {% for person in DEMO_PEOPLE %}
+    <li>
+      <form method="post" action="/demo/sign-in">
+        {{ csrf(request) }}
+        <input type="hidden" name="role" value="{{ person.role.value }}">
+        <button type="submit" class="button {{ 'button-primary' if loop.first else 'button-secondary' }}">Sign in as {{ person.name }}<span class="visually-hidden"> ({{ ROLE_LABELS[person.role] }})</span></button>
+      </form>
+      <p class="hint">{{ person.description }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  <details>
+    <summary>Or sign in by hand</summary>
+    <p>Care circle code <strong>{{ DEMO_CIRCLE_CODE|circle_code }}</strong></p>
+    <ul>
+      {% for person in DEMO_PEOPLE %}<li>{{ person.name }}: passcode <code>{{ person.passcode }}</code></li>{% endfor %}
+    </ul>
+  </details>
+</section>

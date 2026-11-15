@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
+from careloop.demo import DEMO_CIRCLE_CODE, DEMO_PEOPLE
 from careloop.domain.models import (
     AdviceSource,
     DoseStatus,
@@ -76,6 +77,10 @@ def local_time(value: datetime, tz_name: str) -> str:
     return value.astimezone(ZoneInfo(tz_name)).strftime("%I:%M %p").lstrip("0")
 
 
+def demo_mode(request: Request) -> bool:
+    return bool(request.app.state.settings.demo_mode)
+
+
 def build_templates() -> Jinja2Templates:
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))  # autoescape is on for .html
     env = templates.env
@@ -85,6 +90,9 @@ def build_templates() -> Jinja2Templates:
     env.globals.update(
         csrf_token=csrf_token,
         text_size=text_size,
+        demo_mode=demo_mode,
+        DEMO_PEOPLE=DEMO_PEOPLE,
+        DEMO_CIRCLE_CODE=DEMO_CIRCLE_CODE,
         TEXT_SIZES=TEXT_SIZES,
         TEXT_SIZE_LABELS=TEXT_SIZE_LABELS,
         can=can,

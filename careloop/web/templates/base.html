@@ -54,6 +54,12 @@
     {% endif %}
   </header>
 
+  {% if demo_mode(request) %}
+  <div class="demo-banner" role="note">
+    <p class="wrap"><strong>Demo version.</strong> Sample data that resets when the server restarts.
+      Please do not enter real health information.</p>
+  </div>
+  {% endif %}
   <main id="main" class="wrap" tabindex="-1">
     <div class="flash-region" role="status" aria-live="polite">
       {% for message in flashes %}

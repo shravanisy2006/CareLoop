@@ -18,6 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 
 from careloop.config import Settings, load_settings
+from careloop.demo import ensure_demo_circle
 from careloop.domain.errors import CareLoopError
 from careloop.services.care_cycle import CareCycleRunner
 from careloop.services.container import Services, build_services
@@ -27,6 +28,7 @@ from careloop.web.routes import (
     auth,
     circle,
     dashboard,
+    demo,
     doses,
     history,
     medications,
@@ -46,6 +48,9 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
         )
     settings = settings or load_settings()
     services = services or build_services(settings)
+    if settings.demo_mode:
+        demo_circle = ensure_demo_circle(services)
+        logger.warning("Demo mode is on: public demo circle %s is available.", demo_circle.code)
     runner = CareCycleRunner(services.cycle, settings.cycle_seconds)
 
     @asynccontextmanager
@@ -89,6 +94,8 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
         preferences,
     ):
         app.include_router(module.router)
+    if settings.demo_mode:
+        app.include_router(demo.router)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

@@ -26,8 +26,17 @@ class CircleService:
         self._ctx = ctx
 
     def create_circle(
-        self, *, elder_name: str, passcode: str, confirm_passcode: str, email: str, timezone: str
+        self,
+        *,
+        elder_name: str,
+        passcode: str,
+        confirm_passcode: str,
+        email: str,
+        timezone: str,
+        circle_code: str | None = None,
     ) -> tuple[Circle, Member]:
+        """Start a care circle with the elder as its first member. `circle_code`
+        is only given for the public demo circle; real circles get a random one."""
         errors: dict[str, str] = {}
         for check in (
             lambda: validate_display_name(elder_name),
@@ -47,7 +56,7 @@ class CircleService:
         now = self._ctx.clock.now()
         circle = Circle(
             id=self._ctx.id_factory(),
-            code=self._unused_code(),
+            code=circle_code or self._unused_code(),
             elder_name=validate_display_name(elder_name),
             timezone=timezone,
             policy=EscalationPolicy(),

@@ -3,6 +3,7 @@
 {% block title %}Sign in{% endblock %}
 {% block content %}
 <h1>Sign in</h1>
+{% if demo_mode(request) %}{% include "partials/demo_panel.html" %}{% endif %}
 {% if error %}
 <div class="error-summary" role="alert"><p>{{ error }}</p></div>
 {% endif %}

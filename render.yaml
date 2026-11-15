@@ -1,0 +1,24 @@
+# One-click public demo on Render (free plan): New -> Blueprint -> pick this repo.
+# The free plan sleeps after 15 minutes without visitors and its disk is
+# temporary, so demo mode recreates the sample care circle on every start.
+services:
+  - type: web
+    name: careloop-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn careloop.web.app:create_app --factory --host 0.0.0.0 --port $PORT --proxy-headers
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: CARELOOP_ENV
+        value: production
+      - key: CARELOOP_SECRET_KEY
+        generateValue: true
+      - key: CARELOOP_SECURE_COOKIES
+        value: "true"
+      - key: CARELOOP_DEMO_MODE
+        value: "true"
+      - key: CARELOOP_SQLITE_PATH
+        value: /tmp/careloop.db

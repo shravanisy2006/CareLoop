@@ -21,6 +21,26 @@ It differs from a reminder app in three ways:
 > CareLoop records what the care circle enters. It never calculates, suggests or changes a dose,
 > and an unconfirmed dose is reported as "no answer recorded", never as "missed".
 
+## Try it
+
+**Live demo:** _add your Render link here after deploying (see "Public demo link" below)._
+On the demo, press **Sign in as Asha Rao** (the elder), **Sign in as Ravi** (caretaker) or
+**Sign in as Meera** (family) - no typing needed. The free host sleeps when idle, so the first
+page can take about a minute to load.
+
+Demo sign-ins (also shown on the demo's sign-in page): care circle code **DEMO-CARE**, then
+
+| Person | Role | Passcode |
+|---|---|---|
+| Asha Rao | Elder | `demo-elder-2468` |
+| Ravi | Caretaker | `demo-care-1357` |
+| Meera | Family | `demo-family-8642` |
+
+A 3-minute tour: as **Asha**, open the waiting request (plain-language summary, "Advised by
+Dr. Shah") and approve or decline it; open **History -> Doctor visit summary**. As **Ravi**,
+suggest a change to a medicine and notice he cannot approve it himself. As **Asha**, open
+**People & settings** and make Ravi the trusted decision-maker, then see what changes for him.
+
 ## The problem
 
 Reminder apps send a notification and stop, so a missed dose goes unnoticed. When family or
@@ -92,7 +112,7 @@ choose **Start a care circle**.
 Quality checks (the same ones CI runs on every push):
 
 ```bash
-python -m pytest --cov=careloop  # 233 tests; the 6 Firestore ones skip without the emulator
+python -m pytest --cov=careloop  # 239 tests; the 6 Firestore ones skip without the emulator
 ruff check . && ruff format --check .
 mypy                             # strict-ish type check of careloop/
 ```
@@ -113,6 +133,23 @@ repository.
 | `CARELOOP_PUBLIC_URL` | Base URL used in email links | `http://127.0.0.1:8000` |
 | `CARELOOP_SECURE_COOKIES` | `true` when served over HTTPS | `false` |
 | `CARELOOP_SCHEDULER_ENABLED`, `CARELOOP_CYCLE_SECONDS` | Background care cycle and its interval | `true`, `60` |
+| `CARELOOP_DEMO_MODE` | Public demo: sample circle, one-click sign-in buttons, demo banner. Never for real data. | `false` |
+
+### Public demo link (Render, free)
+
+`render.yaml` describes a free Render web service in demo mode (`CARELOOP_DEMO_MODE=true`):
+
+1. Push the repository to GitHub.
+2. Sign in at https://render.com with GitHub (no credit card needed for the free plan).
+3. **New -> Blueprint**, choose the CareLoop repository, then **Apply**. Render generates the
+   secret key itself.
+4. When the deploy finishes, copy the `https://careloop-demo-....onrender.com` link into the
+   "Try it" section above and into your submission.
+
+Demo mode creates the demo care circle on start-up, shows "Sign in as ..." buttons and a
+"Demo version" banner on every page, and must never be used for real people because its
+sign-ins are public. Render's free disk is temporary, so the demo data is recreated after each
+restart; the free service sleeps after 15 minutes without visitors.
 
 ### Google services used
 
@@ -166,12 +203,14 @@ careloop/
   storage/         Repository contract + SQLite and Firestore implementations
   notifications/   Gmail sender and email text
   integrations/    Google Calendar links
+  demo.py          the public demo care circle (only used when demo mode is on)
   security/        passcode hashing, identifiers
   web/             FastAPI routes, templates, CSS, CSRF and security headers
 tests/
   unit/            domain rules, summaries, validation, permissions, hashing, config, email sender
   integration/     services with a real SQLite database, races, decision-maker, repository contract
-  web/             HTTP flows, security, accessibility, text size
+  web/             HTTP flows, security, accessibility, text size, demo mode
 scripts/           seed_demo.py, accessibility_audit.py (axe-core in Chrome)
+render.yaml        free public demo on Render (demo mode)
 .github/workflows/ CI: ruff, mypy and pytest on Python 3.10 and 3.12
 ```

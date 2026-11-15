@@ -81,6 +81,14 @@ test. File and test names are given so each claim can be checked.
 * Gmail uses an App Password over implicit TLS (port 465). SMTP server replies are not stored,
   because they can contain addresses.
 
+## Demo mode
+
+`CARELOOP_DEMO_MODE=true` is for the public demo only. It creates a sample circle whose sign-ins
+are published, so every page shows a "Demo version - do not enter real health information"
+banner. The one-click demo sign-in route is only registered in demo mode (it returns 404
+otherwise, `test_demo_features_do_not_exist_when_demo_mode_is_off`) and still goes through the
+normal passcode check and lockout.
+
 ## Known gaps
 
 * No rate limiting per IP address; lockout is per member.

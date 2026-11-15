@@ -3,6 +3,7 @@
 {% block content %}
 <h1>CareLoop</h1>
 <p class="lead">Every dose followed up until someone answers. Every change decided by the person it affects.</p>
+{% if demo_mode(request) %}{% include "partials/demo_panel.html" %}{% endif %}
 <div class="choice-grid">
   <section class="card">
     <h2>Already in a care circle?</h2>

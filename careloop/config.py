@@ -46,6 +46,7 @@ class Settings:
     scheduler_enabled: bool
     cycle_seconds: int
     default_timezone: str
+    demo_mode: bool = False
     max_email_attempts: int = 3
     session_max_age_seconds: int = 8 * 60 * 60
 
@@ -83,4 +84,5 @@ def load_settings(env_file: Path | None = Path(".env")) -> Settings:
         scheduler_enabled=_flag("CARELOOP_SCHEDULER_ENABLED", True),
         cycle_seconds=max(15, int(os.environ.get("CARELOOP_CYCLE_SECONDS", "60"))),
         default_timezone=os.environ.get("CARELOOP_DEFAULT_TIMEZONE", "Asia/Kolkata"),
+        demo_mode=_flag("CARELOOP_DEMO_MODE", False),
     )

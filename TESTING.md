@@ -24,13 +24,13 @@ Recorded on 15 Nov 2026 on Linux with Python 3.13 (FastAPI 0.163.0) and again wi
 |---|---|---|
 | `tests/unit` | 86 | 86 passed |
 | `tests/integration` | 67 | 61 passed, 6 skipped (Firestore contract; emulator not available) |
-| `tests/web` | 80 | 80 passed |
-| **Total** | **233** | **227 passed, 6 skipped, 0 failed** |
+| `tests/web` | 86 | 86 passed |
+| **Total** | **239** | **233 passed, 6 skipped, 0 failed** |
 
 Line coverage (`pytest --cov=careloop`): **87% overall**. `firestore_repository.py` is 0% because
 the emulator could not be run here; without that module the figure is about 95%.
 
-`ruff check .`, `ruff format --check .` and `mypy` (64 files, `check_untyped_defs`): no issues.
+`ruff check .`, `ruff format --check .` and `mypy` (66 files, `check_untyped_defs`): no issues.
 
 ## What each suite proves
 
@@ -113,6 +113,10 @@ the emulator could not be run here; without that module the figure is about 95%.
   their own request (button hidden and 403), helpers cannot choose a decision-maker, cancelling an
   appointment asks for confirmation, and the doctor visit summary shows real dose counts and
   approved changes with their advice.
+* **Demo mode** (`test_demo_mode.py`): the demo circle is created once, with three people, three
+  medicines, a pending doctor-advised request and taken / skipped / unanswered sample history;
+  each "Sign in as ..." button signs in the right person; unknown roles are refused; and with
+  demo mode off there is no demo panel, no banner, no demo route (404) and no demo circle.
 * **Text size** (`test_text_size.py`): the Normal / Large / Extra large control is on the sign-in
   page, applies the choice, keeps it after signing in, ignores unknown values, needs CSRF, and the
   elder's own pages are larger by default.
@@ -131,6 +135,8 @@ python scripts/accessibility_audit.py --axe node_modules/axe-core/axe.min.js --s
 
 Last result (15 Nov 2026, axe-core 4.x, Google Chrome): **0 violations across 36 page views**
 (12 pages per role, including the request page with its summary and the doctor visit summary).
+A separate run in demo mode (landing page with the demo panel, elder home, doctor summary and
+history) also found 0 violations.
 Automated tools find only part of accessibility problems; the app has not yet been tested with a
 screen reader by a person.
 
