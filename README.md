@@ -23,7 +23,7 @@ It differs from a reminder app in three ways:
 
 ## Try it
 
-**Live demo:** _add your Render link here after deploying (see "Public demo link" below)._
+**Live demo:** https://careloop-demo-uujj.onrender.com
 On the demo, press **Sign in as Asha Rao** (the elder), **Sign in as Ravi** (caretaker) or
 **Sign in as Meera** (family) - no typing needed. The free host sleeps when idle, so the first
 page can take about a minute to load.
