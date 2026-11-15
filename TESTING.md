@@ -21,8 +21,8 @@ run on Windows itself.
 |---|---|---|
 | `tests/unit` | 71 | 71 passed |
 | `tests/integration` | 57 | 51 passed, 6 skipped (Firestore contract; emulator not available) |
-| `tests/web` | 67 | 67 passed |
-| **Total** | **195** | **189 passed, 6 skipped, 0 failed** |
+| `tests/web` | 73 | 73 passed |
+| **Total** | **201** | **195 passed, 6 skipped, 0 failed** |
 
 Line coverage (`pytest --cov=careloop`): **85% overall**. `firestore_repository.py` is 0% because
 the emulator could not be run here; every other module is between 81% and 100%, and the overall
@@ -91,6 +91,9 @@ figure without the Firestore module is about 94%.
   with `role="alert"` linked to fields, `aria-invalid` and `aria-describedby`, success messages in a
   `role="status"` live region. All 13 text/background colour pairs meet WCAG AA (4.5:1); controls
   are at least 48px tall; body text is 20px.
+* **Text size** (`test_text_size.py`): the Normal / Large / Extra large control is on the sign-in
+  page, applies the choice, keeps it after signing in, ignores unknown values, needs CSRF, and the
+  elder's own pages are larger by default.
 
 ## Browser accessibility audit (axe-core)
 

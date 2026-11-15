@@ -69,14 +69,20 @@ def safe_redirect_target(value: object, default: str = "/") -> str:
 
 def sign_in(request: Request, member: Member) -> None:
     """Start a fresh session (prevents session fixation) for `member`."""
+    text_size = request.session.get("text_size")
     request.session.clear()
+    if text_size:
+        request.session["text_size"] = text_size
     request.session[SESSION_MEMBER] = member.id
     request.session[SESSION_CIRCLE] = member.circle_id
     request.session[SESSION_CSRF] = secrets.token_urlsafe(32)
 
 
 def sign_out(request: Request) -> None:
+    text_size = request.session.get("text_size")
     request.session.clear()
+    if text_size:
+        request.session["text_size"] = text_size
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

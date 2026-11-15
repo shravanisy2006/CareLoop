@@ -152,7 +152,8 @@ def main() -> int:
             page.fill("#field-circle_code", code)
             page.fill("#field-display_name", name)
             page.fill("#field-passcode", passcode)
-            page.click("button[type=submit]")
+            page.click('form[action="/login"] button[type=submit]')
+            assert "/login" not in page.url, f"sign-in failed for {name}"
             for path in [*PAGES, proposal_page]:
                 page.goto(base + path)
                 page.evaluate(axe_source)

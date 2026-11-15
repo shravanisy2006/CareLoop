@@ -28,6 +28,9 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html { font-size: 100%; }
+/* Text size chosen by the person (scales everything sized in rem). */
+html.text-large { font-size: 115%; }
+html.text-xlarge { font-size: 135%; }
 
 body {
   margin: 0;
@@ -83,6 +86,31 @@ main:focus { outline: none; box-shadow: none; }
 }
 .link-button { background: none; border: 2px solid transparent; cursor: pointer; text-decoration: underline; font-family: inherit; }
 .inline-form { display: inline; margin: 0; }
+
+/* Elder's screens: larger by default, on top of the chosen text size. */
+.elder-view { --font-size-base: 1.4rem; }
+.elder-view h1 { font-size: 2.5rem; }
+.elder-view h2 { font-size: 1.8rem; }
+.elder-view .dose-card h3 { font-size: 1.75rem; }
+.elder-view .dose-meta { font-size: 1.5rem; }
+.elder-view .dose-actions .button-large { font-size: 1.7rem; min-height: 76px; padding: 0.85rem 2.2rem; }
+.elder-view .dose-actions .button-secondary { font-size: 1.4rem; min-height: 76px; }
+.elder-view .main-nav a, .elder-view .link-button { font-size: 1.35rem; }
+.elder-view .button { font-size: 1.35rem; }
+
+/* Text size control */
+.text-size-form { margin: 0; }
+.text-size-group { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.text-size-group legend { float: left; margin-right: 0.5rem; font-weight: 700; font-size: 1.05rem; }
+.text-size-button {
+  min-height: 48px; min-width: 48px; padding: 0.25rem 0.75rem; border-radius: var(--radius);
+  border: 2px solid var(--color-primary); background: var(--color-background);
+  color: var(--color-primary); font-family: inherit; font-weight: 700; cursor: pointer;
+}
+.text-size-normal { font-size: 1rem; }
+.text-size-large { font-size: 1.2rem; }
+.text-size-xlarge { font-size: 1.4rem; }
+.text-size-button[aria-pressed="true"] { background: var(--color-primary); color: var(--color-primary-text); }
 
 /* Buttons: big, high contrast, clearly labelled */
 .button {

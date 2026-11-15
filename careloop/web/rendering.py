@@ -22,6 +22,7 @@ from careloop.domain.permissions import Action, can
 from careloop.integrations.google_calendar import add_to_calendar_url
 from careloop.notifications.messages import KIND_LABELS
 from careloop.security.identifiers import format_circle_code
+from careloop.web.routes.preferences import TEXT_SIZE_LABELS, TEXT_SIZES, text_size
 from careloop.web.security import csrf_token
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -77,6 +78,9 @@ def build_templates() -> Jinja2Templates:
     env.filters["circle_code"] = format_circle_code
     env.globals.update(
         csrf_token=csrf_token,
+        text_size=text_size,
+        TEXT_SIZES=TEXT_SIZES,
+        TEXT_SIZE_LABELS=TEXT_SIZE_LABELS,
         can=can,
         Action=Action,
         Role=Role,

@@ -34,7 +34,7 @@ small text and complex menus that older adults struggle with.
 | Doctor appointments with 24-hour reminders and "Add to Google Calendar" links | `careloop/integrations/google_calendar.py`, `careloop/web/routes/appointments.py` |
 | Append-only audit log with before/after values | `careloop/storage/sqlite_schema.sql` (triggers), `careloop/web/templates/history/activity.html` |
 | Honest adherence summary (taken / skipped / no answer / waiting) | `careloop/domain/adherence.py` |
-| Elder-first screens: 20px text, 48px+ buttons, no JavaScript, WCAG AA contrast | `careloop/web/templates/`, `careloop/web/static/careloop.css` |
+| Elder-first screens: 20px text (larger on the elder's own pages), a Normal / Large / Extra large text-size control on every page, 48px+ buttons, no JavaScript, WCAG AA contrast | `careloop/web/templates/`, `careloop/web/static/careloop.css` |
 | Two storage backends: SQLite (default) and Google Cloud Firestore | `careloop/storage/` |
 
 See [REQUIREMENTS_MAPPING.md](REQUIREMENTS_MAPPING.md) for a criterion-by-criterion map and
@@ -72,7 +72,7 @@ choose **Start a care circle**.
 Run the tests:
 
 ```bash
-python -m pytest                 # 195 tests; the 6 Firestore ones skip without the emulator
+python -m pytest                 # 201 tests; the 6 Firestore ones skip without the emulator
 python -m pytest --cov=careloop  # with coverage
 ruff check .                     # lint
 ```

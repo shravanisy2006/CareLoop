@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="text-{{ text_size(request) }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,11 +7,22 @@
   <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', path='careloop.css') }}">
 </head>
-<body>
+<body{% if viewer and viewer.member.role == Role.ELDER %} class="elder-view"{% endif %}>
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="site-header">
     <div class="wrap header-row">
       <a class="brand" href="/">CareLoop<span class="tagline">Care that never loses track</span></a>
+      <form method="post" action="/text-size" class="text-size-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <input type="hidden" name="next" value="{{ request.url.path }}">
+        <fieldset class="text-size-group">
+          <legend>Text size</legend>
+          {% for size in TEXT_SIZES %}
+          <button type="submit" name="size" value="{{ size }}" class="text-size-button text-size-{{ size }}"
+                  aria-pressed="{{ 'true' if text_size(request) == size else 'false' }}">{{ TEXT_SIZE_LABELS[size] }}</button>
+          {% endfor %}
+        </fieldset>
+      </form>
       {% if viewer %}
       <p class="signed-in">Signed in as <strong>{{ viewer.member.display_name }}</strong>
         ({{ ROLE_LABELS[viewer.member.role] }})</p>

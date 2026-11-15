@@ -30,6 +30,7 @@ from careloop.web.routes import (
     doses,
     history,
     medications,
+    preferences,
     proposals,
 )
 from careloop.web.security import NotSignedIn, SecurityHeadersMiddleware
@@ -76,7 +77,17 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-    for module in (auth, dashboard, doses, medications, appointments, proposals, history, circle):
+    for module in (
+        auth,
+        dashboard,
+        doses,
+        medications,
+        appointments,
+        proposals,
+        history,
+        circle,
+        preferences,
+    ):
         app.include_router(module.router)
 
     @app.get("/healthz", include_in_schema=False)
