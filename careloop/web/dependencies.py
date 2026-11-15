@@ -13,7 +13,9 @@ from careloop.web.security import SESSION_CIRCLE, SESSION_MEMBER, NotSignedIn
 
 
 def get_services(request: Request) -> Services:
-    return request.app.state.services
+    """The service container created by `create_app`."""
+    services: Services = request.app.state.services
+    return services
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class Viewer:
 
 
 def get_viewer(request: Request, services: Services = Depends(get_services)) -> Viewer:
+    """Return the signed-in member and circle, or raise NotSignedIn."""
     member = services.auth.current_member(
         request.session.get(SESSION_MEMBER), request.session.get(SESSION_CIRCLE)
     )
@@ -36,3 +39,11 @@ def get_viewer(request: Request, services: Services = Depends(get_services)) -> 
         request.session.clear()
         raise NotSignedIn()
     return Viewer(member=member, circle=circle)
+
+
+def member_names(services: Services, viewer: Viewer) -> dict[str, str]:
+    """Map member id to display name for everyone in the viewer's circle.
+
+    Removed members are included, so histories can still show who did what.
+    """
+    return {m.id: m.display_name for m in services.circles.list_members(viewer.member)}

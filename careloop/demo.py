@@ -30,10 +30,13 @@ from careloop.domain.validation import validate_appointment_input, validate_medi
 from careloop.services.container import Services
 
 DEMO_CIRCLE_CODE = "DEMOCARE"
+CARETAKER_SLOT = 3
 
 
 @dataclass(frozen=True)
 class DemoPerson:
+    """One of the three public demo sign-ins."""
+
     role: Role
     name: str
     passcode: str
@@ -57,6 +60,7 @@ DEMO_PEOPLE = (
 
 
 def demo_person(role: str) -> DemoPerson | None:
+    """Return the demo person with this role value, or None."""
     return next((p for p in DEMO_PEOPLE if p.role.value == role), None)
 
 
@@ -69,8 +73,10 @@ def _sample_history(
     times: tuple[str, ...],
     today: date,
 ) -> None:
-    """Three past days of answered and unanswered doses, so the history,
-    adherence and doctor summary pages have realistic content."""
+    """Insert three past days of sample doses, answered and unanswered.
+
+    This gives the history, adherence and doctor summary pages realistic content.
+    """
     tz = ZoneInfo(circle.timezone)
     pattern = [
         DoseStatus.TAKEN,
@@ -87,7 +93,8 @@ def _sample_history(
         for value in times:
             scheduled = datetime.combine(day, parse_local_time(value), tz)
             status = pattern[index % len(pattern)]
-            by = caretaker if index % 4 == 3 else elder
+            # Every fourth answer is recorded by the caretaker on the elder's behalf.
+            by = caretaker if index % 4 == CARETAKER_SLOT else elder
             answered = status in (DoseStatus.TAKEN, DoseStatus.SKIPPED)
             doses.append(
                 Dose(

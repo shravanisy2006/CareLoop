@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.domain.errors import InvalidStateTransition, ValidationFailed
 from careloop.services.container import Services
@@ -17,16 +18,17 @@ router = APIRouter(prefix="/circle")
 
 
 def _page(
-    request,
-    services,
-    viewer,
+    request: Request,
+    services: Services,
+    viewer: Viewer,
     *,
-    member_values=None,
-    member_errors=None,
-    policy_values=None,
-    policy_errors=None,
-    status_code=200,
-):
+    member_values: dict[str, str] | None = None,
+    member_errors: dict[str, str] | None = None,
+    policy_values: dict[str, str] | None = None,
+    policy_errors: dict[str, str] | None = None,
+    status_code: int = 200,
+) -> Response:
+    """The People & settings page, optionally re-shown with form errors."""
     policy = viewer.circle.policy
     return render(
         request,
@@ -53,7 +55,8 @@ def manage(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show people, the trusted decision-maker and escalation timings."""
     return _page(request, services, viewer)
 
 
@@ -62,7 +65,8 @@ async def add_member(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Add a caretaker or family member (elder only)."""
     form = await verified_form(request)
     values = form_values(form)
     try:
@@ -97,7 +101,8 @@ async def remove_member(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Remove a helper's access (elder only)."""
     await verified_form(request)
     try:
         services.circles.remove_member(viewer.member, member_id)
@@ -113,7 +118,8 @@ async def set_decision_maker(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Choose or clear the elder's trusted decision-maker (elder only)."""
     form = await verified_form(request)
     member_id = str(form.get("member_id", "")) or None
     try:
@@ -133,7 +139,8 @@ async def update_settings(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Save the escalation timings (elder only)."""
     form = await verified_form(request)
     values = form_values(form)
     try:

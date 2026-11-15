@@ -18,6 +18,8 @@ from careloop.domain.models import Circle, Member, Proposal, Role
 
 
 class Action(str, Enum):
+    """Everything a member can try to do, checked against their role."""
+
     VIEW_CIRCLE = "view_circle"
     CONFIRM_OWN_DOSE = "confirm_own_dose"
     RECORD_DOSE_ON_BEHALF = "record_dose_on_behalf"
@@ -60,13 +62,16 @@ PERMISSIONS: dict[Role, frozenset[Action]] = {
 
 
 def can(member: Member, action: Action) -> bool:
+    """Whether an active member's role allows `action` (ignores circle)."""
     return member.active and action in PERMISSIONS[member.role]
 
 
 def authorize(member: Member, action: Action, circle_id: str) -> None:
-    """Raise PermissionDenied unless `member` may perform `action` on the
-    care circle `circle_id`. Membership of a different circle is always
-    denied, which is what keeps one elder's records away from another's."""
+    """Raise PermissionDenied unless `member` may perform `action` on the care circle `circle_id`.
+
+    Membership of a different circle is always denied, which is what keeps one elder's records away
+    from another's.
+    """
     if member.circle_id != circle_id or not can(member, action):
         raise PermissionDenied()
 

@@ -7,7 +7,7 @@ setup and no access to anyone's calendar data.
 
 from __future__ import annotations
 
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from careloop.domain.models import Appointment
@@ -16,11 +16,13 @@ GOOGLE_CALENDAR_TEMPLATE_URL = "https://calendar.google.com/calendar/render"
 DEFAULT_VISIT_LENGTH = timedelta(hours=1)
 
 
-def _calendar_time(moment) -> str:
+def _calendar_time(moment: datetime) -> str:
+    """Google Calendar's compact UTC format, e.g. 20261120T050000Z."""
     return moment.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def add_to_calendar_url(appointment: Appointment, elder_name: str) -> str:
+    """Build a Google Calendar link that pre-fills an event for this appointment."""
     d = appointment.details
     start = d.starts_at
     end = start + DEFAULT_VISIT_LENGTH

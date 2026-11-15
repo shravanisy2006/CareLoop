@@ -1,4 +1,6 @@
-"""The background care cycle. Each run:
+"""The background care cycle that follows up every dose.
+
+Each run:
 
 1. creates dose records for the next 48 hours,
 2. moves every unresolved, due dose one step up its escalation ladder
@@ -16,7 +18,8 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Any
 
 from careloop.domain.escalation import (
     EscalationAction,
@@ -36,6 +39,8 @@ APPOINTMENT_REMINDER_LEAD = timedelta(hours=24)
 
 @dataclass
 class CycleReport:
+    """What one run of the care cycle did, for logging and tests."""
+
     doses_created: int = 0
     escalations: int = 0
     closed_unconfirmed: int = 0
@@ -44,7 +49,9 @@ class CycleReport:
     skipped_overlapping_run: bool = False
 
 
-def _system_audit(dose: Dose, action: str, now, before: dict, after: dict) -> AuditEvent:
+def _system_audit(
+    dose: Dose, action: str, now: datetime, before: dict[str, Any], after: dict[str, Any]
+) -> AuditEvent:
     return AuditEvent(
         circle_id=dose.circle_id,
         actor_member_id=None,
@@ -59,6 +66,8 @@ def _system_audit(dose: Dose, action: str, now, before: dict, after: dict) -> Au
 
 
 class CareCycle:
+    """Generates doses, escalates unanswered ones and sends queued email."""
+
     def __init__(self, ctx: ServiceContext, doses: DoseService) -> None:
         self._ctx = ctx
         self._doses = doses
@@ -66,6 +75,7 @@ class CareCycle:
         self._lock = threading.Lock()
 
     def run_once(self) -> CycleReport:
+        """Run one cycle, unless another run is already in progress in this process."""
         if not self._lock.acquire(blocking=False):
             return CycleReport(skipped_overlapping_run=True)
         try:
@@ -116,7 +126,12 @@ class CareCycle:
         return report
 
     def _escalate(
-        self, circle: Circle, dose: Dose, members: list[Member], report: CycleReport, now
+        self,
+        circle: Circle,
+        dose: Dose,
+        members: list[Member],
+        report: CycleReport,
+        now: datetime,
     ) -> None:
         decision = plan_escalation(dose, circle.policy, now)
         before = {"status": dose.status.value, "escalation_level": int(dose.escalation_level)}
@@ -133,8 +148,7 @@ class CareCycle:
                 report.closed_unconfirmed += 1
             return
 
-        if decision.action is EscalationAction.ADVANCE:
-            assert decision.to_level is not None
+        if decision.action is EscalationAction.ADVANCE and decision.to_level is not None:
             medication = self._ctx.repo.get_medication(dose.medication_id)
             if medication is None:
                 return
@@ -176,6 +190,7 @@ class CareCycleRunner:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
+        """Start the background thread (does nothing if already running)."""
         if self._thread is not None:
             return
         self._thread = threading.Thread(target=self._loop, name="careloop-cycle", daemon=True)
@@ -190,6 +205,7 @@ class CareCycleRunner:
             self._stop.wait(self._interval)
 
     def stop(self) -> None:
+        """Ask the thread to stop and wait briefly for it."""
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=5)

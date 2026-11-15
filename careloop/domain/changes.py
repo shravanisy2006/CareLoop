@@ -28,7 +28,7 @@ from careloop.domain.models import (
     ProposalKind,
     ProposalStatus,
     Role,
-    bump,
+    next_version,
 )
 
 
@@ -42,6 +42,7 @@ def audit_event(
     before: dict[str, Any] | None = None,
     after: dict[str, Any] | None = None,
 ) -> AuditEvent:
+    """Build an audit event for an action taken by `actor`."""
     return AuditEvent(
         circle_id=actor.circle_id,
         actor_member_id=actor.id,
@@ -61,6 +62,7 @@ def audit_event(
 def add_medication(
     actor: Member, details: MedicationDetails, now: datetime, new_id: str
 ) -> ChangeSet:
+    """Describe adding a new, active medication."""
     medication = Medication(
         id=new_id,
         circle_id=actor.circle_id,
@@ -88,9 +90,10 @@ def add_medication(
 def change_medication(
     actor: Member, current: Medication, details: MedicationDetails, now: datetime
 ) -> ChangeSet:
+    """Describe changing an active medication's details."""
     if current.status is not MedicationStatus.ACTIVE:
         raise InvalidStateTransition("This medicine has been stopped and cannot be changed.")
-    updated = bump(current, details=details, updated_at=now)
+    updated = replace(current, details=details, updated_at=now, version=next_version(current))
     # Future doses are cancelled and regenerated from the new details, so no
     # upcoming dose ever reflects an outdated schedule.
     return ChangeSet(
@@ -111,9 +114,12 @@ def change_medication(
 
 
 def stop_medication(actor: Member, current: Medication, now: datetime) -> ChangeSet:
+    """Describe stopping a medication and cancelling its upcoming doses."""
     if current.status is not MedicationStatus.ACTIVE:
         raise InvalidStateTransition("This medicine is already stopped.")
-    updated = bump(current, status=MedicationStatus.STOPPED, updated_at=now)
+    updated = replace(
+        current, status=MedicationStatus.STOPPED, updated_at=now, version=next_version(current)
+    )
     return ChangeSet(
         medications=[(updated, current.version)],
         cancel_future_doses=[(current.id, now)],
@@ -137,6 +143,7 @@ def stop_medication(actor: Member, current: Medication, now: datetime) -> Change
 def add_appointment(
     actor: Member, details: AppointmentDetails, now: datetime, new_id: str
 ) -> ChangeSet:
+    """Describe adding a new appointment."""
     appointment = Appointment(
         id=new_id,
         circle_id=actor.circle_id,
@@ -164,9 +171,10 @@ def add_appointment(
 def change_appointment(
     actor: Member, current: Appointment, details: AppointmentDetails, now: datetime
 ) -> ChangeSet:
+    """Describe changing a scheduled appointment."""
     if current.status is not AppointmentStatus.SCHEDULED:
         raise InvalidStateTransition("This appointment was cancelled and cannot be changed.")
-    updated = bump(current, details=details, updated_at=now)
+    updated = replace(current, details=details, updated_at=now, version=next_version(current))
     return ChangeSet(
         appointments=[(updated, current.version)],
         audit_events=[
@@ -184,9 +192,12 @@ def change_appointment(
 
 
 def cancel_appointment(actor: Member, current: Appointment, now: datetime) -> ChangeSet:
+    """Describe cancelling a scheduled appointment."""
     if current.status is not AppointmentStatus.SCHEDULED:
         raise InvalidStateTransition("This appointment is already cancelled.")
-    updated = bump(current, status=AppointmentStatus.CANCELLED, updated_at=now)
+    updated = replace(
+        current, status=AppointmentStatus.CANCELLED, updated_at=now, version=next_version(current)
+    )
     return ChangeSet(
         appointments=[(updated, current.version)],
         audit_events=[
@@ -216,10 +227,49 @@ def _merge(target: ChangeSet, extra: ChangeSet) -> ChangeSet:
     return target
 
 
-def _decided(proposal: Proposal, status: ProposalStatus, decider: Member, now: datetime, note: str):
+def _decided(
+    proposal: Proposal, status: ProposalStatus, decider: Member, now: datetime, note: str
+) -> Proposal:
     return replace(
         proposal, status=status, decided_by=decider.id, decided_at=now, decision_note=note
     )
+
+
+def _proposal_effect(
+    decider: Member,
+    proposal: Proposal,
+    target: Medication | Appointment | None,
+    now: datetime,
+    new_id: Callable[[], str],
+) -> ChangeSet:
+    """Build the record change an approved proposal makes.
+
+    Uses the same builders as the elder's direct edits, so each change has one definition.
+    """
+    med, appt = proposal.medication_details, proposal.appointment_details
+    kind = proposal.kind
+    if kind is ProposalKind.ADD_MEDICATION and med is not None:
+        return add_medication(decider, med, now, new_id())
+    if (
+        kind is ProposalKind.CHANGE_MEDICATION
+        and med is not None
+        and isinstance(target, Medication)
+    ):
+        return change_medication(decider, target, med, now)
+    if kind is ProposalKind.STOP_MEDICATION and isinstance(target, Medication):
+        return stop_medication(decider, target, now)
+    if kind is ProposalKind.ADD_APPOINTMENT and appt is not None:
+        return add_appointment(decider, appt, now, new_id())
+    if (
+        kind is ProposalKind.CHANGE_APPOINTMENT
+        and appt is not None
+        and isinstance(target, Appointment)
+    ):
+        return change_appointment(decider, target, appt, now)
+    if kind is ProposalKind.CANCEL_APPOINTMENT and isinstance(target, Appointment):
+        return cancel_appointment(decider, target, now)
+    # Only reachable with a malformed proposal (e.g. a hand-edited database row).
+    raise InvalidStateTransition("This request is incomplete and cannot be applied.")
 
 
 def approve_proposal(
@@ -230,9 +280,11 @@ def approve_proposal(
     new_id: Callable[[], str],
     note: str = "",
 ) -> ChangeSet:
-    """Describe approving `proposal`: the proposal is marked approved and its
-    change is applied, together, or not at all. `decider` is the elder or the
-    elder's trusted decision-maker; permission is checked by the caller.
+    """Describe approving a proposal as one atomic ChangeSet.
+
+    The proposal is marked approved and its change is applied together, or not at all.
+    `decider` is the elder or the elder's trusted decision-maker; the caller checks
+    permission.
 
     If the target record changed after the proposal was made, approval is
     refused so the decider never approves something based on stale details.
@@ -248,25 +300,7 @@ def approve_proposal(
         )
 
     kind = proposal.kind
-    if kind is ProposalKind.ADD_MEDICATION:
-        assert proposal.medication_details is not None
-        effect = add_medication(decider, proposal.medication_details, now, new_id())
-    elif kind is ProposalKind.CHANGE_MEDICATION:
-        assert isinstance(target, Medication) and proposal.medication_details is not None
-        effect = change_medication(decider, target, proposal.medication_details, now)
-    elif kind is ProposalKind.STOP_MEDICATION:
-        assert isinstance(target, Medication)
-        effect = stop_medication(decider, target, now)
-    elif kind is ProposalKind.ADD_APPOINTMENT:
-        assert proposal.appointment_details is not None
-        effect = add_appointment(decider, proposal.appointment_details, now, new_id())
-    elif kind is ProposalKind.CHANGE_APPOINTMENT:
-        assert isinstance(target, Appointment) and proposal.appointment_details is not None
-        effect = change_appointment(decider, target, proposal.appointment_details, now)
-    else:
-        assert isinstance(target, Appointment)
-        effect = cancel_appointment(decider, target, now)
-
+    effect = _proposal_effect(decider, proposal, target, now, new_id)
     decided = _decided(proposal, ProposalStatus.APPROVED, decider, now, note)
     changes = ChangeSet(
         proposals=[(decided, ProposalStatus.PENDING)],
@@ -293,6 +327,7 @@ def approve_proposal(
 def reject_proposal(
     decider: Member, proposal: Proposal, now: datetime, note: str = ""
 ) -> ChangeSet:
+    """Describe declining a pending proposal; no record changes."""
     if proposal.status is not ProposalStatus.PENDING:
         raise InvalidStateTransition("This request has already been decided.")
     decided = _decided(proposal, ProposalStatus.REJECTED, decider, now, note)
@@ -318,6 +353,7 @@ def reject_proposal(
 
 
 def withdraw_proposal(proposer: Member, proposal: Proposal, now: datetime) -> ChangeSet:
+    """Describe the proposer withdrawing their own pending proposal."""
     if proposal.status is not ProposalStatus.PENDING:
         raise InvalidStateTransition("This request has already been decided.")
     cancelled = replace(proposal, status=ProposalStatus.CANCELLED, decided_at=now)

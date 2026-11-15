@@ -40,6 +40,7 @@ Record = dict[str, Any]
 
 
 def ts(value: datetime | None) -> str | None:
+    """Serialise an aware datetime as a sortable UTC ISO-8601 string."""
     if value is None:
         return None
     if value.tzinfo is None:
@@ -48,19 +49,22 @@ def ts(value: datetime | None) -> str | None:
 
 
 def parse_ts(value: str | None) -> datetime | None:
+    """Parse a stored timestamp, keeping None as None."""
     return datetime.fromisoformat(value) if value else None
 
 
 def _req_ts(value: str) -> datetime:
-    parsed = parse_ts(value)
-    assert parsed is not None
-    return parsed
+    """Parse a timestamp column that the schema declares NOT NULL."""
+    if not value:
+        raise ValueError("A required timestamp is missing from a stored record")
+    return datetime.fromisoformat(value)
 
 
 # --- Circle ----------------------------------------------------------------
 
 
 def circle_to_record(circle: Circle) -> Record:
+    """Flatten a Circle for storage."""
     return {
         "id": circle.id,
         "code": circle.code,
@@ -75,6 +79,7 @@ def circle_to_record(circle: Circle) -> Record:
 
 
 def record_to_circle(r: Record) -> Circle:
+    """Rebuild a Circle from storage."""
     return Circle(
         id=r["id"],
         code=r["code"],
@@ -94,6 +99,7 @@ def record_to_circle(r: Record) -> Circle:
 
 
 def member_to_record(m: Member) -> Record:
+    """Flatten a Member for storage."""
     return {
         "id": m.id,
         "circle_id": m.circle_id,
@@ -110,6 +116,7 @@ def member_to_record(m: Member) -> Record:
 
 
 def record_to_member(r: Record) -> Member:
+    """Rebuild a Member from storage."""
     return Member(
         id=r["id"],
         circle_id=r["circle_id"],
@@ -128,6 +135,7 @@ def record_to_member(r: Record) -> Member:
 
 
 def medication_to_record(m: Medication) -> Record:
+    """Flatten a Medication for storage."""
     d = m.details
     return {
         "id": m.id,
@@ -146,6 +154,7 @@ def medication_to_record(m: Medication) -> Record:
 
 
 def record_to_medication(r: Record) -> Medication:
+    """Rebuild a Medication from storage."""
     details = MedicationDetails.from_dict(
         {
             "name": r["name"],
@@ -171,6 +180,7 @@ def record_to_medication(r: Record) -> Medication:
 
 
 def appointment_to_record(a: Appointment) -> Record:
+    """Flatten an Appointment for storage."""
     d = a.details
     return {
         "id": a.id,
@@ -188,6 +198,7 @@ def appointment_to_record(a: Appointment) -> Record:
 
 
 def record_to_appointment(r: Record) -> Appointment:
+    """Rebuild an Appointment from storage."""
     return Appointment(
         id=r["id"],
         circle_id=r["circle_id"],
@@ -209,6 +220,7 @@ def record_to_appointment(r: Record) -> Appointment:
 
 
 def dose_to_record(d: Dose) -> Record:
+    """Flatten a Dose for storage."""
     return {
         "id": d.id,
         "circle_id": d.circle_id,
@@ -224,6 +236,7 @@ def dose_to_record(d: Dose) -> Record:
 
 
 def record_to_dose(r: Record) -> Dose:
+    """Rebuild a Dose from storage."""
     return Dose(
         id=r["id"],
         circle_id=r["circle_id"],
@@ -242,6 +255,7 @@ def record_to_dose(r: Record) -> Dose:
 
 
 def proposal_to_record(p: Proposal) -> Record:
+    """Flatten a Proposal (details stored as JSON) for storage."""
     return {
         "id": p.id,
         "circle_id": p.circle_id,
@@ -264,6 +278,7 @@ def proposal_to_record(p: Proposal) -> Record:
 
 
 def record_to_proposal(r: Record) -> Proposal:
+    """Rebuild a Proposal from storage; older rows without advice get the default."""
     kind = ProposalKind(r["kind"])
     payload = json.loads(r["payload_json"]) if r["payload_json"] else {}
     med = MedicationDetails.from_dict(payload) if payload and "dosage" in payload else None
@@ -296,6 +311,7 @@ def record_to_proposal(r: Record) -> Proposal:
 
 
 def notification_to_record(n: Notification) -> Record:
+    """Flatten a Notification for storage."""
     return {
         "id": n.id,
         "circle_id": n.circle_id,
@@ -314,6 +330,7 @@ def notification_to_record(n: Notification) -> Record:
 
 
 def record_to_notification(r: Record) -> Notification:
+    """Rebuild a Notification from storage."""
     return Notification(
         id=r["id"],
         circle_id=r["circle_id"],
@@ -335,6 +352,7 @@ def record_to_notification(r: Record) -> Notification:
 
 
 def audit_to_record(e: AuditEvent) -> Record:
+    """Flatten an AuditEvent (before/after as JSON) for storage."""
     return {
         "circle_id": e.circle_id,
         "actor_member_id": e.actor_member_id,
@@ -349,6 +367,7 @@ def audit_to_record(e: AuditEvent) -> Record:
 
 
 def record_to_audit(r: Record, event_id: str) -> AuditEvent:
+    """Rebuild an AuditEvent from storage."""
     return AuditEvent(
         id=event_id,
         circle_id=r["circle_id"],

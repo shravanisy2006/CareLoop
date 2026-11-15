@@ -7,12 +7,15 @@ from careloop.storage.repository import Repository
 
 
 def build_repository(settings: Settings) -> Repository:
+    """Return the storage backend selected by CARELOOP_STORAGE."""
     if settings.storage_backend == "firestore":
         # Imported lazily so the default SQLite setup needs no Google libraries.
-        from careloop.storage.firestore_repository import FirestoreRepository
+        from careloop.storage.firestore_repository import (  # noqa: PLC0415
+            FirestoreRepository,
+        )
 
         return FirestoreRepository.from_project(settings.firestore_project)
 
-    from careloop.storage.sqlite_repository import SqliteRepository
+    from careloop.storage.sqlite_repository import SqliteRepository  # noqa: PLC0415
 
     return SqliteRepository(settings.sqlite_path)

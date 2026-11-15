@@ -14,6 +14,8 @@ from careloop.domain.models import Dose, DoseStatus
 
 @dataclass(frozen=True)
 class AdherenceSummary:
+    """Counts of dose outcomes over a period, with unknown kept separate."""
+
     taken: int
     taken_on_time: int
     skipped: int
@@ -34,6 +36,7 @@ class AdherenceSummary:
 
     @property
     def unknown_percent(self) -> int | None:
+        """Share of closed doses with no answer recorded. None if there is no data."""
         if self.closed_total == 0:
             return None
         return round(100 * self.unconfirmed / self.closed_total)

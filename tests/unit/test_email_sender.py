@@ -7,6 +7,7 @@ through Gmail needs credentials and is described in TESTING.md.
 from __future__ import annotations
 
 import smtplib
+from typing import ClassVar
 
 import pytest
 
@@ -24,7 +25,7 @@ MESSAGE = OutgoingEmail(to="ravi@example.com", subject="Hello", body="Body text"
 
 
 class FakeSMTP:
-    instances: list[FakeSMTP] = []
+    instances: ClassVar[list[FakeSMTP]] = []
     fail_login = False
     refuse = False
 

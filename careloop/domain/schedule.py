@@ -6,18 +6,20 @@ time window, return the UTC instants at which doses fall.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from careloop.domain.models import MedicationDetails
 
+TIME_PATTERN = re.compile(r"[0-9]{2}:[0-9]{2}")
+
 
 def parse_local_time(value: str) -> time:
     """Parse "HH:MM" (24-hour). Raises ValueError on anything else."""
-    parts = value.split(":")
-    if len(parts) != 2 or not all(p.isdigit() and len(p) == 2 for p in parts):
+    if not TIME_PATTERN.fullmatch(value):
         raise ValueError(f"Time must look like 08:30, got {value!r}")
-    hour, minute = int(parts[0]), int(parts[1])
+    hour, minute = int(value[:2]), int(value[3:])
     return time(hour=hour, minute=minute)  # raises ValueError if out of range
 
 
@@ -53,7 +55,9 @@ def dose_times_in_window(
 
 
 def dose_id_for(medication_id: str, medication_version: int, scheduled_for: datetime) -> str:
-    """Deterministic dose id, so generating the same window twice cannot
-    create duplicate doses. The medication version is part of the id because
-    a change cancels future doses and regenerates them from the new details."""
+    """Deterministic dose id, so generating the same window twice cannot create duplicate doses.
+
+    The medication version is part of the id because a change cancels future doses and regenerates
+    them from the new details.
+    """
     return f"{medication_id}-v{medication_version}-{int(scheduled_for.timestamp())}"

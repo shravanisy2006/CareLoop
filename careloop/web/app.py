@@ -6,7 +6,9 @@ Run locally with:  uvicorn careloop.web.app:create_app --factory --reload
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -16,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.config import Settings, load_settings
 from careloop.demo import ensure_demo_circle
@@ -39,13 +42,22 @@ from careloop.web.security import NotSignedIn, SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
+ROUTE_MODULES = (
+    auth,
+    dashboard,
+    doses,
+    medications,
+    appointments,
+    proposals,
+    history,
+    circle,
+    preferences,
+)
 
 
 def create_app(settings: Settings | None = None, services: Services | None = None) -> FastAPI:
-    if not logging.getLogger().handlers:
-        logging.basicConfig(
-            level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-        )
+    """Build the FastAPI app; tests pass their own settings and services."""
+    _configure_logging()
     settings = settings or load_settings()
     services = services or build_services(settings)
     if settings.demo_mode:
@@ -54,7 +66,7 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     runner = CareCycleRunner(services.cycle, settings.cycle_seconds)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if settings.scheduler_enabled:
             runner.start()
         yield
@@ -70,7 +82,20 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     app.state.settings = settings
     app.state.services = services
     app.state.templates = build_templates()
+    _add_middleware(app, settings)
+    _include_routes(app, settings)
+    _register_error_handlers(app)
+    return app
 
+
+def _configure_logging() -> None:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
+
+
+def _add_middleware(app: FastAPI, settings: Settings) -> None:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         SessionMiddleware,
@@ -80,72 +105,63 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
         same_site="lax",
         https_only=settings.secure_cookies,
     )
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-    for module in (
-        auth,
-        dashboard,
-        doses,
-        medications,
-        appointments,
-        proposals,
-        history,
-        circle,
-        preferences,
-    ):
+
+def _include_routes(app: FastAPI, settings: Settings) -> None:
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    for module in ROUTE_MODULES:
         app.include_router(module.router)
     if settings.demo_mode:
+        # The one-click demo sign-in does not exist at all outside demo mode.
         app.include_router(demo.router)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.exception_handler(NotSignedIn)
-    async def not_signed_in(request: Request, _: NotSignedIn):
-        return RedirectResponse("/login", status_code=303)
 
-    @app.exception_handler(CareLoopError)
-    async def careloop_error(request: Request, exc: CareLoopError):
-        return render(
-            request,
-            "error.html",
-            {"message": exc.message, "status": exc.status_code},
-            status_code=exc.status_code,
-        )
+def _error_page(request: Request, message: str, status: int) -> Response:
+    return render(request, "error.html", {"message": message, "status": status}, status_code=status)
 
-    @app.exception_handler(StarletteHTTPException)
-    async def http_error(request: Request, exc: StarletteHTTPException):
-        message = (
-            "We could not find that page."
-            if exc.status_code == 404
-            else "That request could not be completed."
-        )
-        return render(
-            request,
-            "error.html",
-            {"message": message, "status": exc.status_code},
-            status_code=exc.status_code,
-        )
 
-    @app.exception_handler(RequestValidationError)
-    async def bad_request(request: Request, _: RequestValidationError):
-        return render(
-            request,
-            "error.html",
-            {"message": "That request was not valid.", "status": 400},
-            status_code=400,
-        )
+async def _not_signed_in(_request: Request, _exc: Exception) -> Response:
+    return RedirectResponse("/login", status_code=HTTPStatus.SEE_OTHER)
 
-    @app.exception_handler(Exception)
-    async def unexpected(request: Request, exc: Exception):
-        # Log the type and route only: messages may contain user data.
-        logger.error("Unhandled %s on %s", type(exc).__name__, request.url.path, exc_info=exc)
-        return render(
-            request,
-            "error.html",
-            {"message": "Something went wrong on our side. Please try again.", "status": 500},
-            status_code=500,
-        )
 
-    return app
+async def _careloop_error(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, CareLoopError):  # pragma: no cover - registered for this type
+        raise exc
+    return _error_page(request, exc.message, exc.status_code)
+
+
+async def _http_error(request: Request, exc: Exception) -> Response:
+    status = getattr(exc, "status_code", HTTPStatus.INTERNAL_SERVER_ERROR)
+    message = (
+        "We could not find that page."
+        if status == HTTPStatus.NOT_FOUND
+        else "That request could not be completed."
+    )
+    return _error_page(request, message, status)
+
+
+async def _bad_request(request: Request, _exc: Exception) -> Response:
+    return _error_page(request, "That request was not valid.", HTTPStatus.BAD_REQUEST)
+
+
+async def _unexpected(request: Request, exc: Exception) -> Response:
+    # Log the type and route only: exception messages may contain user data.
+    logger.error("Unhandled %s on %s", type(exc).__name__, request.url.path, exc_info=exc)
+    return _error_page(
+        request,
+        "Something went wrong on our side. Please try again.",
+        HTTPStatus.INTERNAL_SERVER_ERROR,
+    )
+
+
+def _register_error_handlers(app: FastAPI) -> None:
+    """Every error ends on a friendly page; nothing technical is shown to people."""
+    app.add_exception_handler(NotSignedIn, _not_signed_in)
+    app.add_exception_handler(CareLoopError, _careloop_error)
+    app.add_exception_handler(StarletteHTTPException, _http_error)
+    app.add_exception_handler(RequestValidationError, _bad_request)
+    app.add_exception_handler(Exception, _unexpected)

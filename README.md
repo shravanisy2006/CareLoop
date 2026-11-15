@@ -114,7 +114,7 @@ Quality checks (the same ones CI runs on every push):
 ```bash
 python -m pytest --cov=careloop  # 239 tests; the 6 Firestore ones skip without the emulator
 ruff check . && ruff format --check .
-mypy                             # strict-ish type check of careloop/
+mypy                             # mypy --strict on careloop/
 ```
 
 ## Configuration

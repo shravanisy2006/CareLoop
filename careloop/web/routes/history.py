@@ -4,17 +4,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.domain.models import AppointmentStatus, ProposalStatus
 from careloop.services.container import Services
-from careloop.web.dependencies import Viewer, get_services, get_viewer
+from careloop.web.dependencies import Viewer, get_services, get_viewer, member_names
 from careloop.web.rendering import render
 
 router = APIRouter()
-
-
-def _names(services: Services, viewer: Viewer) -> dict[str, str]:
-    return {m.id: m.display_name for m in services.circles.list_members(viewer.member)}
 
 
 @router.get("/history")
@@ -23,7 +20,8 @@ def dose_history(
     days: int = Query(default=7, ge=1, le=90),
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Every dose in the chosen period with an adherence summary."""
     return render(
         request,
         "history/doses.html",
@@ -32,7 +30,7 @@ def dose_history(
             "days": days,
             "doses": services.doses.history(viewer.member, viewer.circle, days),
             "adherence": services.doses.adherence(viewer.member, viewer.circle, days),
-            "names": _names(services, viewer),
+            "names": member_names(services, viewer),
         },
     )
 
@@ -42,14 +40,15 @@ def activity(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """The circle's append-only activity log."""
     return render(
         request,
         "history/activity.html",
         {
             "viewer": viewer,
             "events": services.history.audit_events(viewer.member),
-            "names": _names(services, viewer),
+            "names": member_names(services, viewer),
         },
     )
 
@@ -59,14 +58,15 @@ def notifications(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Every email and what happened to it."""
     return render(
         request,
         "history/notifications.html",
         {
             "viewer": viewer,
             "notifications": services.history.notifications(viewer.member),
-            "names": _names(services, viewer),
+            "names": member_names(services, viewer),
             "email_configured": services.ctx.settings.email_configured,
         },
     )
@@ -78,7 +78,7 @@ def doctor_visit_summary(
     days: int = Query(default=30, ge=7, le=90),
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
     """A one-page, printable summary to take to a doctor's appointment."""
     now = services.ctx.clock.now()
     approved = [
@@ -102,6 +102,6 @@ def doctor_visit_summary(
             "overall": services.doses.adherence(viewer.member, viewer.circle, days),
             "approved": approved,
             "upcoming": upcoming[:3],
-            "names": _names(services, viewer),
+            "names": member_names(services, viewer),
         },
     )

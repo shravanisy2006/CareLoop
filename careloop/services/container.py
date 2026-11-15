@@ -21,6 +21,8 @@ from careloop.storage.repository import Repository
 
 @dataclass
 class Services:
+    """Every service, sharing one ServiceContext."""
+
     ctx: ServiceContext
     auth: AuthService
     circles: CircleService
@@ -38,6 +40,7 @@ def build_services(
     clock: Clock | None = None,
     email_sender: EmailSender | None = None,
 ) -> Services:
+    """Create all services; tests pass their own repository, clock and email sender."""
     ctx = ServiceContext(
         repo=repo or build_repository(settings),
         clock=clock or SystemClock(),

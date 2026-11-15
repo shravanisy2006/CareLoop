@@ -15,19 +15,42 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "S"]
-ignore = ["S101", "B008"]  # B008: FastAPI's Depends() idiom
+# A deliberately strict rule set: correctness, security (bandit), typing,
+# docstrings, complexity, naming and performance checks.
+select = [
+    "E", "W", "F", "I", "B", "UP", "S", "SIM", "RET", "C90", "ANN", "D", "PL", "PERF",
+    "RUF", "N", "ARG", "PIE", "T20", "PTH", "BLE", "FBT", "ERA", "TRY", "DTZ", "ISC",
+]
+ignore = [
+    "B008",   # FastAPI's Depends() in argument defaults is the framework's idiom
+    "D105",   # magic methods are self-explanatory
+    "D107",   # __init__ documented on the class
+    "N818",   # domain errors are named as outcomes (AuthenticationFailed, NotFound)
+    "TRY003", # short user-facing messages are passed to domain errors on purpose
+    "ISC001", # conflicts with the formatter
+    "PERF203", # per-item error handling in loops is intended (validation, idempotent inserts)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 8
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "D", "ANN", "PLR2004", "PLR0913", "ARG", "FBT", "DTZ", "PLC0415", "C901"]
+"scripts/**" = ["T20", "D103", "S101"]
+# Each method's contract is documented once, on the Repository protocol.
+"careloop/storage/sqlite_repository.py" = ["D102"]
+"careloop/storage/firestore_repository.py" = ["D102"]
 
 [tool.mypy]
 python_version = "3.10"
 packages = ["careloop"]
-check_untyped_defs = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-no_implicit_optional = true
+strict = true
 
 [[tool.mypy.overrides]]
 module = ["google.*"]

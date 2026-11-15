@@ -1,5 +1,7 @@
-"""Creating a care circle and managing who belongs to it. Only the elder can
-add or remove people and change the escalation timings."""
+"""Creating a care circle and managing who belongs to it.
+
+Only the elder can add or remove people and change the escalation timings.
+"""
 
 from __future__ import annotations
 
@@ -8,9 +10,10 @@ from careloop.domain.errors import InvalidStateTransition, NotFound, ValidationF
 from careloop.domain.models import Circle, EscalationPolicy, Member, Role
 from careloop.domain.permissions import Action, authorize
 from careloop.domain.validation import (
-    validate_display_name,
-    validate_email,
-    validate_passcode,
+    validate_all,
+    validate_helper_role,
+    validate_matching_passcodes,
+    validate_person,
     validate_policy_input,
     validate_timezone,
 )
@@ -22,6 +25,8 @@ MAX_MEMBERS_PER_CIRCLE = 12
 
 
 class CircleService:
+    """Creates care circles and manages their members and settings."""
+
     def __init__(self, ctx: ServiceContext) -> None:
         self._ctx = ctx
 
@@ -35,29 +40,21 @@ class CircleService:
         timezone: str,
         circle_code: str | None = None,
     ) -> tuple[Circle, Member]:
-        """Start a care circle with the elder as its first member. `circle_code`
-        is only given for the public demo circle; real circles get a random one."""
-        errors: dict[str, str] = {}
-        for check in (
-            lambda: validate_display_name(elder_name),
-            lambda: validate_passcode(passcode),
-            lambda: validate_email(email),
+        """Start a care circle with the elder as its first member.
+
+        `circle_code` is only given for the public demo circle; real circles get a random one.
+        """
+        elder_input, _, _ = validate_all(
+            lambda: validate_person(elder_name, email, passcode),
             lambda: validate_timezone(timezone),
-        ):
-            try:
-                check()
-            except ValidationFailed as exc:
-                errors.update(exc.field_errors)
-        if passcode != confirm_passcode:
-            errors["confirm_passcode"] = "The two passcodes do not match."
-        if errors:
-            raise ValidationFailed(errors)
+            lambda: validate_matching_passcodes(passcode, confirm_passcode),
+        )
 
         now = self._ctx.clock.now()
         circle = Circle(
             id=self._ctx.id_factory(),
             code=circle_code or self._unused_code(),
-            elder_name=validate_display_name(elder_name),
+            elder_name=elder_input.display_name,
             timezone=timezone,
             policy=EscalationPolicy(),
             created_at=now,
@@ -67,8 +64,8 @@ class CircleService:
             circle_id=circle.id,
             display_name=circle.elder_name,
             role=Role.ELDER,
-            email=validate_email(email),
-            passcode_hash=hash_passcode(passcode),
+            email=elder_input.email,
+            passcode_hash=hash_passcode(elder_input.passcode),
             failed_attempts=0,
             locked_until=None,
             active=True,
@@ -93,6 +90,7 @@ class CircleService:
         raise RuntimeError("Could not generate a unique circle code")
 
     def get_circle(self, viewer: Member) -> Circle:
+        """Return the viewer's own care circle."""
         authorize(viewer, Action.VIEW_CIRCLE, viewer.circle_id)
         circle = self._ctx.repo.get_circle(viewer.circle_id)
         if circle is None:
@@ -100,32 +98,19 @@ class CircleService:
         return circle
 
     def list_members(self, viewer: Member) -> list[Member]:
+        """Return everyone in the viewer's circle, including removed members."""
         authorize(viewer, Action.VIEW_CIRCLE, viewer.circle_id)
         return self._ctx.repo.list_members(viewer.circle_id)
 
     def add_member(
         self, elder: Member, *, display_name: str, role: str, email: str, passcode: str
     ) -> Member:
+        """Add a caretaker or family member (elder only)."""
         authorize(elder, Action.MANAGE_MEMBERS, elder.circle_id)
-        errors: dict[str, str] = {}
-        try:
-            chosen_role = Role(role)
-            if chosen_role is Role.ELDER:
-                raise ValueError
-        except ValueError:
-            errors["role"] = "Please choose caretaker or family member."
-            chosen_role = Role.FAMILY
-        for check in (
-            lambda: validate_display_name(display_name),
-            lambda: validate_email(email),
-            lambda: validate_passcode(passcode),
-        ):
-            try:
-                check()
-            except ValidationFailed as exc:
-                errors.update(exc.field_errors)
-        if errors:
-            raise ValidationFailed(errors)
+        chosen_role, person = validate_all(
+            lambda: validate_helper_role(role),
+            lambda: validate_person(display_name, email, passcode),
+        )
         active = [m for m in self._ctx.repo.list_members(elder.circle_id) if m.active]
         if len(active) >= MAX_MEMBERS_PER_CIRCLE:
             raise ValidationFailed({"display_name": "This care circle is full (12 people)."})
@@ -134,10 +119,10 @@ class CircleService:
         member = Member(
             id=self._ctx.id_factory(),
             circle_id=elder.circle_id,
-            display_name=validate_display_name(display_name),
+            display_name=person.display_name,
             role=chosen_role,
-            email=validate_email(email),
-            passcode_hash=hash_passcode(passcode),
+            email=person.email,
+            passcode_hash=hash_passcode(person.passcode),
             failed_attempts=0,
             locked_until=None,
             active=True,
@@ -155,6 +140,7 @@ class CircleService:
         return member
 
     def remove_member(self, elder: Member, member_id: str) -> None:
+        """Remove a helper's access (elder only); their history is kept."""
         authorize(elder, Action.MANAGE_MEMBERS, elder.circle_id)
         member = self._ctx.repo.get_member(member_id)
         if member is None or member.circle_id != elder.circle_id:
@@ -177,8 +163,10 @@ class CircleService:
             self.set_decision_maker(elder, None)
 
     def set_decision_maker(self, elder: Member, member_id: str | None) -> Circle:
-        """Let the elder trust one helper to approve or decline changes on their
-        behalf, or (with None) take that trust back."""
+        """Let the elder trust one helper to decide on proposals on their behalf.
+
+        Passing None takes that trust back.
+        """
         authorize(elder, Action.MANAGE_MEMBERS, elder.circle_id)
         circle = self.get_circle(elder)
         chosen: Member | None = None
@@ -204,6 +192,7 @@ class CircleService:
         return self.get_circle(elder)
 
     def update_policy(self, elder: Member, *, caretaker: str, family: str, close: str) -> Circle:
+        """Change the escalation timings (elder only)."""
         authorize(elder, Action.CHANGE_SETTINGS, elder.circle_id)
         policy = validate_policy_input(caretaker, family, close)
         circle = self.get_circle(elder)

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from starlette.requests import Request
+from starlette.responses import Response
 
-from careloop.domain.models import AppointmentStatus, DoseStatus, ProposalStatus, Role
+from careloop.domain.models import Appointment, AppointmentStatus, DoseStatus, ProposalStatus, Role
 from careloop.services.container import Services
 from careloop.web.dependencies import Viewer, get_services, get_viewer
 from careloop.web.rendering import render
@@ -14,7 +15,7 @@ from careloop.web.security import SESSION_MEMBER
 router = APIRouter()
 
 
-def _upcoming_appointments(services: Services, viewer: Viewer, limit: int = 3):
+def _upcoming_appointments(services: Services, viewer: Viewer, limit: int = 3) -> list[Appointment]:
     now = services.ctx.clock.now()
     return [
         a
@@ -24,7 +25,8 @@ def _upcoming_appointments(services: Services, viewer: Viewer, limit: int = 3):
 
 
 @router.get("/")
-def home(request: Request, services: Services = Depends(get_services)):
+def home(request: Request, services: Services = Depends(get_services)) -> Response:
+    """The elder's Today page, the care team overview, or the landing page."""
     if not request.session.get(SESSION_MEMBER):
         return render(request, "auth/landing.html")
     viewer = get_viewer(request, services)

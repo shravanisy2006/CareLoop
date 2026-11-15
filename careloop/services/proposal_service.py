@@ -47,6 +47,8 @@ NEEDS_APPOINTMENT_DETAILS = {ProposalKind.ADD_APPOINTMENT, ProposalKind.CHANGE_A
 
 
 class ProposalService:
+    """Suggesting, deciding and withdrawing changes."""
+
     def __init__(self, ctx: ServiceContext, doses: DoseService) -> None:
         self._ctx = ctx
         self._doses = doses
@@ -96,6 +98,7 @@ class ProposalService:
         reason: str = "",
         advice: Advice | None = None,
     ) -> Proposal:
+        """Store a suggestion and notify whoever may decide on it; changes no record."""
         authorize(proposer, Action.CREATE_PROPOSAL, proposer.circle_id)
         if kind in NEEDS_MEDICATION_DETAILS and medication_details is None:
             raise ValidationFailed({"name": "Please fill in the medicine details."})
@@ -165,6 +168,7 @@ class ProposalService:
     # --- Reading ---------------------------------------------------------------
 
     def get(self, viewer: Member, proposal_id: str) -> Proposal:
+        """Return one proposal from the viewer's circle."""
         proposal = self._ctx.repo.get_proposal(proposal_id)
         if proposal is None or proposal.circle_id != viewer.circle_id:
             raise NotFound()
@@ -172,6 +176,7 @@ class ProposalService:
         return proposal
 
     def list(self, viewer: Member, status: ProposalStatus | None = None) -> list[Proposal]:
+        """Return the circle's proposals, newest first, optionally by status."""
         authorize(viewer, Action.VIEW_CIRCLE, viewer.circle_id)
         return self._ctx.repo.list_proposals(viewer.circle_id, status)
 
@@ -193,6 +198,7 @@ class ProposalService:
     # --- Deciding --------------------------------------------------------------
 
     def approve(self, decider: Member, proposal_id: str, note: str = "") -> None:
+        """Approve a proposal and apply its change in one transaction."""
         proposal = self.get(decider, proposal_id)
         circle = self._circle(decider)
         authorize_decision(decider, circle, proposal)
@@ -208,6 +214,7 @@ class ProposalService:
                 self._doses.generate_for_medication(circle, saved, now)
 
     def reject(self, decider: Member, proposal_id: str, note: str = "") -> None:
+        """Decline a proposal; nothing else changes."""
         proposal = self.get(decider, proposal_id)
         authorize_decision(decider, self._circle(decider), proposal)
         self._ctx.repo.apply_changeset(
@@ -215,6 +222,7 @@ class ProposalService:
         )
 
     def withdraw(self, proposer: Member, proposal_id: str) -> None:
+        """Let the proposer withdraw their own pending proposal."""
         proposal = self.get(proposer, proposal_id)
         if proposal.proposed_by != proposer.id:
             raise PermissionDenied("Only the person who made this request can withdraw it.")

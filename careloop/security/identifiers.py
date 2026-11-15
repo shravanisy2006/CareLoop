@@ -1,6 +1,8 @@
-"""Random identifiers. Record ids and circle codes are unguessable, but
-access is never granted by knowing an id: every request is also checked
-against the signed-in member's care circle and role."""
+"""Random identifiers.
+
+Record ids and circle codes are unguessable, but access is never granted by knowing an id: every
+request is also checked against the signed-in member's care circle and role.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +15,12 @@ CIRCLE_CODE_LENGTH = 8
 
 
 def new_id() -> str:
+    """Return a random 128-bit id as hex."""
     return uuid.uuid4().hex
 
 
 def new_circle_code() -> str:
+    """Return a random 8-character circle code from an unambiguous alphabet."""
     return "".join(secrets.choice(CIRCLE_CODE_ALPHABET) for _ in range(CIRCLE_CODE_LENGTH))
 
 

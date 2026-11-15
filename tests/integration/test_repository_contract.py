@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -31,7 +32,7 @@ from careloop.domain.models import (
     NotificationKind,
     NotificationStatus,
     Role,
-    bump,
+    next_version,
 )
 from careloop.storage.sqlite_repository import SqliteRepository
 
@@ -115,9 +116,12 @@ def test_versioned_update_rejects_stale_writes_atomically(repo):
     circle, _ = _seed(repo)
     med = _medication(circle.id)
     repo.apply_changeset(ChangeSet(medications=[(med, None)]))
-    repo.apply_changeset(ChangeSet(medications=[(bump(med, updated_at=NOW), 1)]))
+    repo.apply_changeset(
+        ChangeSet(medications=[(replace(med, updated_at=NOW, version=next_version(med)), 1)])
+    )
     stale = ChangeSet(
-        medications=[(bump(med, updated_at=NOW), 1)], audit_events=[_audit(circle.id, "stale")]
+        medications=[(replace(med, updated_at=NOW, version=next_version(med)), 1)],
+        audit_events=[_audit(circle.id, "stale")],
     )
     with pytest.raises(ConcurrencyConflict):
         repo.apply_changeset(stale)

@@ -1,11 +1,14 @@
-"""Doctor appointments, with the same rule as medicines: the elder changes
-them directly; anyone else's change is a proposal until it is approved."""
+"""Doctor appointments, with the same rule as medicines.
+
+The elder changes them directly; anyone else's change is a proposal until it is approved.
+"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.domain.errors import ValidationFailed
 from careloop.domain.models import Appointment, AppointmentStatus, ProposalKind
@@ -28,7 +31,7 @@ def _form_page(
     errors: dict[str, str] | None = None,
     appointment: Appointment | None = None,
     status_code: int = 200,
-):
+) -> Response:
     return render(
         request,
         "appointments/form.html",
@@ -45,7 +48,7 @@ def _cancel_page(
     values: dict[str, str] | None = None,
     errors: dict[str, str] | None = None,
     status_code: int = 200,
-):
+) -> Response:
     return render(
         request,
         "appointments/cancel.html",
@@ -64,7 +67,8 @@ def list_appointments(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show upcoming appointments, then past and cancelled ones."""
     now = services.ctx.clock.now()
     appointments = services.records.list_appointments(viewer.member)
     upcoming = [
@@ -81,7 +85,8 @@ def list_appointments(
 
 
 @router.get("/new")
-def new_appointment(request: Request, viewer: Viewer = Depends(get_viewer)):
+def new_appointment(request: Request, viewer: Viewer = Depends(get_viewer)) -> Response:
+    """Show the form to add (or suggest) an appointment."""
     return _form_page(request, viewer, values={"advice_source": "doctor"})
 
 
@@ -90,7 +95,8 @@ async def create_appointment(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Add an appointment (elder) or send it as a suggestion (helpers)."""
     form = await verified_form(request)
     tz, now = viewer.circle.timezone, services.ctx.clock.now()
     try:
@@ -119,7 +125,8 @@ def edit_appointment_page(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show the form to change (or suggest changing) an appointment."""
     appointment = services.records.get_appointment(viewer.member, appointment_id)
     values = {
         **appointment_to_values(appointment, viewer.circle.timezone),
@@ -134,7 +141,8 @@ async def edit_appointment(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Change an appointment (elder) or send the change as a suggestion."""
     form = await verified_form(request)
     appointment = services.records.get_appointment(viewer.member, appointment_id)
     tz, now = viewer.circle.timezone, services.ctx.clock.now()
@@ -170,7 +178,7 @@ def cancel_appointment_page(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
     """Ask for confirmation before cancelling (or suggesting to cancel)."""
     appointment = services.records.get_appointment(viewer.member, appointment_id)
     return _cancel_page(request, viewer, appointment)
@@ -182,7 +190,8 @@ async def cancel_appointment(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Cancel an appointment (elder) or suggest cancelling it."""
     form = await verified_form(request)
     appointment = services.records.get_appointment(viewer.member, appointment_id)
     if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):

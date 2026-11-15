@@ -14,7 +14,7 @@ import hmac
 import secrets
 
 from starlette.datastructures import FormData
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -33,6 +33,8 @@ CONTENT_SECURITY_POLICY = (
 
 
 class CsrfFailed(CareLoopError):
+    """A form was submitted without the session's CSRF token."""
+
     status_code = 403
     default_message = "This form expired. Please go back, reload the page and try again."
 
@@ -42,6 +44,7 @@ class NotSignedIn(Exception):
 
 
 def csrf_token(request: Request) -> str:
+    """Return the session's CSRF token, creating one if needed."""
     token = request.session.get(SESSION_CSRF)
     if not token:
         token = secrets.token_urlsafe(32)
@@ -79,6 +82,7 @@ def sign_in(request: Request, member: Member) -> None:
 
 
 def sign_out(request: Request) -> None:
+    """Clear the session, keeping only the text-size preference."""
     text_size = request.session.get("text_size")
     request.session.clear()
     if text_size:
@@ -86,7 +90,10 @@ def sign_out(request: Request) -> None:
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next) -> Response:
+    """Adds CSP, anti-framing, no-sniff and no-store headers to every response."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Add the security headers to the response."""
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         response.headers["X-Content-Type-Options"] = "nosniff"

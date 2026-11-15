@@ -32,6 +32,7 @@ def _derive(passcode: str, salt: bytes, n: int, r: int, p: int) -> bytes:
 
 
 def hash_passcode(passcode: str) -> str:
+    """Hash a passcode with scrypt and a fresh random salt."""
     salt = secrets.token_bytes(SALT_BYTES)
     digest = _derive(passcode, salt, SCRYPT_N, SCRYPT_R, SCRYPT_P)
     return "$".join(
@@ -47,6 +48,7 @@ def hash_passcode(passcode: str) -> str:
 
 
 def verify_passcode(passcode: str, stored_hash: str) -> bool:
+    """Check a passcode against a stored hash in constant time."""
     try:
         scheme, n, r, p, salt_b64, digest_b64 = stored_hash.split("$")
         if scheme != "scrypt":

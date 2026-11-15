@@ -30,9 +30,12 @@ from careloop.domain.models import (
 )
 
 MAX_CLOSE_AFTER_MINUTES = 12 * 60
+MIN_CARETAKER_MINUTES = 5
 
 
 class EscalationAction(str, Enum):
+    """What the care cycle should do with one dose right now."""
+
     NONE = "none"
     ADVANCE = "advance"
     CLOSE = "close"
@@ -40,6 +43,8 @@ class EscalationAction(str, Enum):
 
 @dataclass(frozen=True)
 class EscalationDecision:
+    """The result of `plan_escalation`: an action and, to advance, the new level."""
+
     action: EscalationAction
     to_level: EscalationLevel | None = None
 
@@ -50,8 +55,8 @@ NO_ACTION = EscalationDecision(EscalationAction.NONE)
 def validate_policy(policy: EscalationPolicy) -> EscalationPolicy:
     """Steps must happen in order and the ladder must end within 12 hours."""
     errors: dict[str, str] = {}
-    if policy.caretaker_after_minutes < 5:
-        errors["caretaker_after_minutes"] = "Must be at least 5 minutes."
+    if policy.caretaker_after_minutes < MIN_CARETAKER_MINUTES:
+        errors["caretaker_after_minutes"] = f"Must be at least {MIN_CARETAKER_MINUTES} minutes."
     if policy.family_after_minutes <= policy.caretaker_after_minutes:
         errors["family_after_minutes"] = "Must be later than the caretaker step."
     if policy.close_after_minutes <= policy.family_after_minutes:
@@ -64,6 +69,7 @@ def validate_policy(policy: EscalationPolicy) -> EscalationPolicy:
 
 
 def target_level(elapsed: timedelta, policy: EscalationPolicy) -> EscalationLevel:
+    """The highest level whose waiting time has passed after `elapsed`."""
     if elapsed >= timedelta(minutes=policy.family_after_minutes):
         return EscalationLevel.FAMILY_NOTIFIED
     if elapsed >= timedelta(minutes=policy.caretaker_after_minutes):
@@ -113,4 +119,5 @@ def recipients_for_level(level: EscalationLevel, members: list[Member]) -> list[
 
 
 def notification_kind_for_level(level: EscalationLevel) -> NotificationKind:
+    """The kind of email sent when a dose reaches `level`."""
     return LEVEL_AUDIENCE[level][1]

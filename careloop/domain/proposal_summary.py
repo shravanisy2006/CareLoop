@@ -7,6 +7,7 @@ who advised it. The same text is used on the request page and in the email.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -23,7 +24,7 @@ from careloop.domain.models import (
 
 
 def clock_time(value: str) -> str:
-    """ "08:00" -> "8:00 AM"."""
+    """Format "08:00" as "8:00 AM"."""
     hour, minute = (int(part) for part in value.split(":"))
     return time(hour, minute).strftime("%I:%M %p").lstrip("0")
 
@@ -36,10 +37,12 @@ def join_words(items: list[str]) -> str:
 
 
 def day_label(value: date) -> str:
+    """Format a date as "14 Nov 2026"."""
     return f"{value.day} {value.strftime('%b %Y')}"
 
 
 def when_label(moment: datetime, tz_name: str) -> str:
+    """Format a moment in the circle's timezone as "20 Nov 2026 at 10:30 AM"."""
     local = moment.astimezone(ZoneInfo(tz_name))
     return f"{local.day} {local.strftime('%b %Y')} at {local.strftime('%I:%M %p').lstrip('0')}"
 
@@ -81,6 +84,70 @@ def _appointment_changes(old: AppointmentDetails, new: AppointmentDetails, tz: s
     return changes
 
 
+def _add_medication(p: Proposal, _: object, who: str, __: str) -> str | None:
+    med = p.medication_details
+    if med is None:
+        return None
+    until = f" until {day_label(med.end_date)}" if med.end_date else ""
+    return (
+        f"{who} suggests adding {med.name}: {med.dosage} at {_times(med)}, "
+        f"starting {day_label(med.start_date)}{until}."
+    )
+
+
+def _change_medication(p: Proposal, current: object, who: str, _: str) -> str | None:
+    if p.medication_details is None or not isinstance(current, Medication):
+        return None
+    changes = _medication_changes(current.details, p.medication_details)
+    what = join_words(changes) if changes else "nothing would be different"
+    return f"{who} suggests changing {current.details.name}: {what}."
+
+
+def _stop_medication(_: Proposal, current: object, who: str, __: str) -> str | None:
+    if not isinstance(current, Medication):
+        return None
+    med = current.details
+    return f"{who} suggests stopping {med.name} ({med.dosage} at {_times(med)})."
+
+
+def _add_appointment(p: Proposal, _: object, who: str, tz_name: str) -> str | None:
+    appt = p.appointment_details
+    if appt is None:
+        return None
+    return (
+        f"{who} suggests adding an appointment with {appt.doctor_name} on "
+        f"{when_label(appt.starts_at, tz_name)} for {appt.purpose}."
+    )
+
+
+def _change_appointment(p: Proposal, current: object, who: str, tz_name: str) -> str | None:
+    if p.appointment_details is None or not isinstance(current, Appointment):
+        return None
+    changes = _appointment_changes(current.details, p.appointment_details, tz_name)
+    what = join_words(changes) if changes else "nothing would be different"
+    return f"{who} suggests changing the appointment with {current.details.doctor_name}: {what}."
+
+
+def _cancel_appointment(_: Proposal, current: object, who: str, tz_name: str) -> str | None:
+    if not isinstance(current, Appointment):
+        return None
+    visit = current.details
+    return (
+        f"{who} suggests cancelling the appointment with {visit.doctor_name} on "
+        f"{when_label(visit.starts_at, tz_name)}."
+    )
+
+
+_DESCRIBERS: dict[ProposalKind, Callable[[Proposal, object, str, str], str | None]] = {
+    ProposalKind.ADD_MEDICATION: _add_medication,
+    ProposalKind.CHANGE_MEDICATION: _change_medication,
+    ProposalKind.STOP_MEDICATION: _stop_medication,
+    ProposalKind.ADD_APPOINTMENT: _add_appointment,
+    ProposalKind.CHANGE_APPOINTMENT: _change_appointment,
+    ProposalKind.CANCEL_APPOINTMENT: _cancel_appointment,
+}
+
+
 def describe_change(
     proposal: Proposal,
     current: Medication | Appointment | None,
@@ -88,43 +155,8 @@ def describe_change(
     tz_name: str,
 ) -> str:
     """One sentence saying what would change if the request is approved."""
-    kind, who = proposal.kind, proposer_name
-    med, appt = proposal.medication_details, proposal.appointment_details
-
-    if kind is ProposalKind.ADD_MEDICATION and med:
-        until = f" until {day_label(med.end_date)}" if med.end_date else ""
-        return (
-            f"{who} suggests adding {med.name}: {med.dosage} at {_times(med)}, "
-            f"starting {day_label(med.start_date)}{until}."
-        )
-    if kind is ProposalKind.CHANGE_MEDICATION and med and isinstance(current, Medication):
-        changes = _medication_changes(current.details, med)
-        if not changes:
-            return (
-                f"{who} suggests changing {current.details.name}, but nothing would be different."
-            )
-        return f"{who} suggests changing {current.details.name}: {join_words(changes)}."
-    if kind is ProposalKind.STOP_MEDICATION and isinstance(current, Medication):
-        med_now = current.details
-        return f"{who} suggests stopping {med_now.name} ({med_now.dosage} at {_times(med_now)})."
-    if kind is ProposalKind.ADD_APPOINTMENT and appt:
-        return (
-            f"{who} suggests adding an appointment with {appt.doctor_name} on "
-            f"{when_label(appt.starts_at, tz_name)} for {appt.purpose}."
-        )
-    if kind is ProposalKind.CHANGE_APPOINTMENT and appt and isinstance(current, Appointment):
-        changes = _appointment_changes(current.details, appt, tz_name)
-        what = join_words(changes) if changes else "nothing would be different"
-        return (
-            f"{who} suggests changing the appointment with {current.details.doctor_name}: {what}."
-        )
-    if kind is ProposalKind.CANCEL_APPOINTMENT and isinstance(current, Appointment):
-        visit = current.details
-        return (
-            f"{who} suggests cancelling the appointment with {visit.doctor_name} on "
-            f"{when_label(visit.starts_at, tz_name)}."
-        )
-    return f"{who} suggests a change."
+    sentence = _DESCRIBERS[proposal.kind](proposal, current, proposer_name, tz_name)
+    return sentence or f"{proposer_name} suggests a change."
 
 
 def describe_advice(advice: Advice, proposer_name: str) -> str:
@@ -145,6 +177,7 @@ def summarise_proposal(
     proposer_name: str,
     tz_name: str,
 ) -> str:
+    """The full plain-language summary: what would change, then who advised it."""
     return (
         f"{describe_change(proposal, current, proposer_name, tz_name)} "
         f"{describe_advice(proposal.advice, proposer_name)}"

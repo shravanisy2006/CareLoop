@@ -49,6 +49,8 @@ def _insert_sql(table: str, record: rec.Record, *, or_ignore: bool = False) -> s
 
 
 class SqliteRepository:
+    """Repository backed by a local SQLite file (the default)."""
+
     def __init__(self, path: str | Path) -> None:
         self._path = str(path)
         self.init_schema()
@@ -97,8 +99,10 @@ class SqliteRepository:
         (
             "proposals",
             "advice_source",
-            "TEXT NOT NULL DEFAULT 'care_team' "
-            "CHECK (advice_source IN ('doctor', 'pharmacist', 'care_team'))",
+            (
+                "TEXT NOT NULL DEFAULT 'care_team' "
+                "CHECK (advice_source IN ('doctor', 'pharmacist', 'care_team'))"
+            ),
         ),
         ("proposals", "advised_by", "TEXT NOT NULL DEFAULT ''"),
         ("proposals", "advised_on", "TEXT"),

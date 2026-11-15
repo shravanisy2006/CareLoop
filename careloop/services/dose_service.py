@@ -1,5 +1,4 @@
-"""Dose records: generating them from schedules, confirming them, and
-reporting adherence."""
+"""Dose records: generating them from schedules, confirming them, and reporting adherence."""
 
 from __future__ import annotations
 
@@ -45,10 +44,13 @@ class DoseView:
 
     @property
     def is_open(self) -> bool:
+        """Whether an answer can still be recorded for this dose."""
         return self.dose.status in RESOLVABLE_DOSE_STATUSES
 
 
 class DoseService:
+    """Creates dose records, records answers and reports adherence."""
+
     def __init__(self, ctx: ServiceContext) -> None:
         self._ctx = ctx
 
@@ -85,6 +87,7 @@ class DoseService:
         return self._ctx.repo.insert_doses_if_absent(doses)
 
     def generate_for_circle(self, circle: Circle, now: datetime) -> int:
+        """Create upcoming doses for every medication in a circle; returns how many were new."""
         return sum(
             self.generate_for_medication(circle, med, now)
             for med in self._ctx.repo.list_medications(circle.id)
@@ -115,6 +118,7 @@ class DoseService:
         return self._views(circle.id, relevant)
 
     def history(self, viewer: Member, circle: Circle, days: int = 7) -> list[DoseView]:
+        """Doses from the last `days` days, newest first."""
         authorize(viewer, Action.VIEW_CIRCLE, circle.id)
         now = self._ctx.clock.now()
         doses = self._ctx.repo.list_doses(
@@ -123,6 +127,7 @@ class DoseService:
         return list(reversed(self._views(circle.id, doses)))
 
     def adherence(self, viewer: Member, circle: Circle, days: int = 7) -> AdherenceSummary:
+        """Adherence summary for the last `days` days."""
         authorize(viewer, Action.VIEW_CIRCLE, circle.id)
         now = self._ctx.clock.now()
         doses = self._ctx.repo.list_doses(
@@ -196,5 +201,6 @@ class DoseService:
             # Someone else recorded it between our read and our write.
             raise AlreadyResolved()
         resolved = self._ctx.repo.get_dose(dose.id)
-        assert resolved is not None
+        if resolved is None:  # deleted between the write and this read; never expected
+            raise NotFound()
         return resolved

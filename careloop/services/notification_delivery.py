@@ -38,6 +38,8 @@ BATCH_SIZE = 100
 
 @dataclass
 class DeliveryReport:
+    """Counts of what happened to queued emails in one delivery run."""
+
     sent: int = 0
     failed: int = 0
     gave_up: int = 0
@@ -46,6 +48,8 @@ class DeliveryReport:
 
 
 class NotificationDelivery:
+    """Sends queued notifications and records each outcome honestly."""
+
     def __init__(self, ctx: ServiceContext) -> None:
         self._ctx = ctx
 
@@ -60,6 +64,7 @@ class NotificationDelivery:
         return dose.status in RESOLVABLE_DOSE_STATUSES
 
     def deliver_pending(self) -> DeliveryReport:
+        """Try to send every pending or retryable email once."""
         repo, settings = self._ctx.repo, self._ctx.settings
         report = DeliveryReport()
         for item in repo.list_deliverable_notifications(settings.max_email_attempts, BATCH_SIZE):

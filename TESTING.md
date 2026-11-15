@@ -5,7 +5,7 @@ pip install -r requirements-dev.txt
 python -m pytest                    # all tests
 python -m pytest --cov=careloop     # with coverage
 ruff check . && ruff format --check .   # lint and formatting (incl. security rules)
-mypy                                # type check of careloop/
+mypy                                # strict type check (mypy --strict) of careloop/
 ```
 
 The same four checks run in GitHub Actions on Python 3.10 and 3.12 for every push
@@ -30,7 +30,7 @@ Recorded on 15 Nov 2026 on Linux with Python 3.13 (FastAPI 0.163.0) and again wi
 Line coverage (`pytest --cov=careloop`): **87% overall**. `firestore_repository.py` is 0% because
 the emulator could not be run here; without that module the figure is about 95%.
 
-`ruff check .`, `ruff format --check .` and `mypy` (66 files, `check_untyped_defs`): no issues.
+`ruff check .` (26 rule families, see `pyproject.toml`), `ruff format --check .` and `mypy --strict` (66 files): no issues. Any rule that is switched off is listed in `pyproject.toml` with the reason next to it.
 
 ## What each suite proves
 

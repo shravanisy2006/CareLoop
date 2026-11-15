@@ -26,8 +26,9 @@ is set. See TESTING.md for whether that run has been done.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
@@ -64,6 +65,7 @@ PROPOSALS = "proposals"
 NOTIFICATIONS = "notifications"
 AUDIT_EVENTS = "audit_events"
 
+T = TypeVar("T")
 RESOLVABLE = {DoseStatus.SCHEDULED.value, DoseStatus.UNCONFIRMED.value}
 
 
@@ -71,18 +73,23 @@ def _name_doc_id(circle_id: str, name_key: str) -> str:
     return hashlib.sha256(f"{circle_id}\x00{name_key}".encode()).hexdigest()
 
 
-def _eq(field: str, value: Any) -> FieldFilter:
+def _eq(field: str, value: object) -> FieldFilter:
     return FieldFilter(field, "==", value)
 
 
 class FirestoreRepository:
+    """Repository backed by Google Cloud Firestore."""
+
     def __init__(self, client: firestore.Client) -> None:
         self._db = client
 
     @classmethod
     def from_project(cls, project: str | None) -> FirestoreRepository:
-        """Uses Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS)
-        or the emulator when FIRESTORE_EMULATOR_HOST is set."""
+        """Connect with Application Default Credentials.
+
+        GOOGLE_APPLICATION_CREDENTIALS points at a service-account key; when
+        FIRESTORE_EMULATOR_HOST is set, the local emulator is used instead.
+        """
         return cls(firestore.Client(project=project))
 
     def init_schema(self) -> None:
@@ -98,10 +105,11 @@ class FirestoreRepository:
         return snap.to_dict() if snap.exists else None
 
     @staticmethod
-    def _data(snapshot: Any) -> dict[str, Any]:
+    def _data(snapshot: firestore.DocumentSnapshot[Any]) -> dict[str, Any]:
         """Document data; queries only return existing documents, so it is never None."""
-        data = snapshot.to_dict()
-        assert data is not None
+        data: dict[str, Any] | None = snapshot.to_dict()
+        if data is None:
+            raise ValueError(f"Firestore document {snapshot.id} has no data")
         return data
 
     def _where(self, collection: str, *filters: FieldFilter) -> list[dict[str, Any]]:
@@ -113,9 +121,10 @@ class FirestoreRepository:
     def _audit_write(self, tx: firestore.Transaction, event: AuditEvent) -> None:
         tx.create(self._col(AUDIT_EVENTS).document(), rec.audit_to_record(event))
 
-    def _run(self, fn: Any) -> Any:
+    def _run(self, fn: Callable[[firestore.Transaction], T]) -> T:
         """Run `fn(transaction)` as a Firestore transaction (retried on contention)."""
-        return firestore.transactional(fn)(self._db.transaction())
+        result: T = firestore.transactional(fn)(self._db.transaction())
+        return result
 
     # --- Care circles and members ------------------------------------------
 
@@ -267,57 +276,78 @@ class FirestoreRepository:
     def apply_changeset(self, changes: ChangeSet) -> None:
         def work(tx: firestore.Transaction) -> None:
             # Firestore transactions require every read before any write.
-            for proposal, expected in changes.proposals:
-                if expected is None:
-                    continue
-                snap = self._col(PROPOSALS).document(proposal.id).get(transaction=tx)
-                if not snap.exists or snap.get("status") != expected.value:
-                    raise ConcurrencyConflict("This request has already been decided.")
-            for collection, items in (
-                (MEDICATIONS, changes.medications),
-                (APPOINTMENTS, changes.appointments),
-            ):
-                for entity, expected_version in items:
-                    if expected_version is None:
-                        continue
-                    snap = self._col(collection).document(entity.id).get(transaction=tx)
-                    if not snap.exists or snap.get("version") != expected_version:
-                        raise ConcurrencyConflict()
-            doses_to_cancel: list[Any] = []
-            for medication_id, after in changes.cancel_future_doses:
-                query = (
-                    self._col(DOSES)
-                    .where(filter=_eq("medication_id", medication_id))
-                    .where(filter=_eq("status", DoseStatus.SCHEDULED.value))
-                    .where(filter=FieldFilter("scheduled_for", ">", rec.ts(after)))
-                )
-                doses_to_cancel.extend(snap.reference for snap in query.get(transaction=tx))
-            new_notifications = []
-            for notification in changes.notifications:
-                ref = self._col(NOTIFICATIONS).document(notification.id)
-                if not ref.get(transaction=tx).exists:
-                    new_notifications.append((ref, notification))
-
-            for proposal, _ in changes.proposals:
-                tx.set(self._col(PROPOSALS).document(proposal.id), rec.proposal_to_record(proposal))
-            for medication, _ in changes.medications:
-                tx.set(
-                    self._col(MEDICATIONS).document(medication.id),
-                    rec.medication_to_record(medication),
-                )
-            for appointment, _ in changes.appointments:
-                tx.set(
-                    self._col(APPOINTMENTS).document(appointment.id),
-                    rec.appointment_to_record(appointment),
-                )
-            for ref in doses_to_cancel:
-                tx.update(ref, {"status": DoseStatus.CANCELLED.value})
-            for ref, notification in new_notifications:
-                tx.create(ref, rec.notification_to_record(notification))
-            for event in changes.audit_events:
-                self._audit_write(tx, event)
+            self._check_expectations(tx, changes)
+            doses_to_cancel = self._future_dose_refs(tx, changes)
+            new_notifications = [
+                n
+                for n in changes.notifications
+                if not self._col(NOTIFICATIONS).document(n.id).get(transaction=tx).exists
+            ]
+            self._write_changeset(tx, changes, doses_to_cancel, new_notifications)
 
         self._run(work)
+
+    def _check_expectations(self, tx: firestore.Transaction, changes: ChangeSet) -> None:
+        """Raise ConcurrencyConflict if any record is no longer as the caller read it."""
+        for proposal, expected in changes.proposals:
+            if expected is None:
+                continue
+            snap = self._col(PROPOSALS).document(proposal.id).get(transaction=tx)
+            if not snap.exists or snap.get("status") != expected.value:
+                raise ConcurrencyConflict("This request has already been decided.")
+        versioned: list[tuple[str, str, int | None]] = [
+            (MEDICATIONS, m.id, v) for m, v in changes.medications
+        ] + [(APPOINTMENTS, a.id, v) for a, v in changes.appointments]
+        for collection, doc_id, expected_version in versioned:
+            if expected_version is None:
+                continue
+            snap = self._col(collection).document(doc_id).get(transaction=tx)
+            if not snap.exists or snap.get("version") != expected_version:
+                raise ConcurrencyConflict()
+
+    def _future_dose_refs(
+        self, tx: firestore.Transaction, changes: ChangeSet
+    ) -> list[firestore.DocumentReference]:
+        """Scheduled doses after the given time for each medication being changed."""
+        refs: list[firestore.DocumentReference] = []
+        for medication_id, after in changes.cancel_future_doses:
+            query = (
+                self._col(DOSES)
+                .where(filter=_eq("medication_id", medication_id))
+                .where(filter=_eq("status", DoseStatus.SCHEDULED.value))
+                .where(filter=FieldFilter("scheduled_for", ">", rec.ts(after)))
+            )
+            refs.extend(snap.reference for snap in query.get(transaction=tx))
+        return refs
+
+    def _write_changeset(
+        self,
+        tx: firestore.Transaction,
+        changes: ChangeSet,
+        doses_to_cancel: list[firestore.DocumentReference],
+        new_notifications: list[Notification],
+    ) -> None:
+        """Write every part of a change set inside the running transaction."""
+        for proposal, _ in changes.proposals:
+            tx.set(self._col(PROPOSALS).document(proposal.id), rec.proposal_to_record(proposal))
+        for medication, _ in changes.medications:
+            tx.set(
+                self._col(MEDICATIONS).document(medication.id), rec.medication_to_record(medication)
+            )
+        for appointment, _ in changes.appointments:
+            tx.set(
+                self._col(APPOINTMENTS).document(appointment.id),
+                rec.appointment_to_record(appointment),
+            )
+        for ref in doses_to_cancel:
+            tx.update(ref, {"status": DoseStatus.CANCELLED.value})
+        for notification in new_notifications:
+            tx.create(
+                self._col(NOTIFICATIONS).document(notification.id),
+                rec.notification_to_record(notification),
+            )
+        for event in changes.audit_events:
+            self._audit_write(tx, event)
 
     # --- Doses -----------------------------------------------------------------
 

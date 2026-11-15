@@ -15,10 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from careloop.config import load_settings  # noqa: E402
-from careloop.demo import DEMO_PEOPLE, ensure_demo_circle  # noqa: E402
-from careloop.security.identifiers import format_circle_code  # noqa: E402
-from careloop.services.container import build_services  # noqa: E402
+from careloop.config import load_settings
+from careloop.demo import DEMO_PEOPLE, ensure_demo_circle
+from careloop.security.identifiers import format_circle_code
+from careloop.services.container import build_services
 
 
 def main() -> None:

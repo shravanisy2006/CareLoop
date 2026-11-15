@@ -11,6 +11,9 @@ from careloop.domain.changes import audit_event
 from careloop.domain.errors import AlreadyResolved, InvalidStateTransition, NotFound
 from careloop.domain.models import DoseStatus, EscalationLevel, NotificationKind, Role
 from careloop.domain.validation import validate_appointment_input
+from careloop.notifications.email_sender import UnconfiguredSender
+from careloop.services.container import build_services
+from careloop.storage.sqlite_repository import SqliteRepository
 from tests.conftest import medication_details
 
 
@@ -180,10 +183,6 @@ def test_appointment_reminder_is_queued_once_within_24_hours(services, circle, c
 
 
 def test_unconfigured_email_is_recorded_honestly(settings, clock, tmp_path):
-    from careloop.notifications.email_sender import UnconfiguredSender
-    from careloop.services.container import build_services
-    from careloop.storage.sqlite_repository import SqliteRepository
-
     services = build_services(
         settings,
         repo=SqliteRepository(tmp_path / "x.db"),

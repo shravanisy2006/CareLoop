@@ -9,7 +9,7 @@ All datetimes are timezone-aware and stored in UTC. Local times (for example
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum, IntEnum
 from typing import Any
@@ -56,16 +56,22 @@ class EscalationLevel(IntEnum):
 
 
 class MedicationStatus(str, Enum):
+    """Whether a medication is still being taken."""
+
     ACTIVE = "active"
     STOPPED = "stopped"
 
 
 class AppointmentStatus(str, Enum):
+    """Whether an appointment is still going ahead."""
+
     SCHEDULED = "scheduled"
     CANCELLED = "cancelled"
 
 
 class ProposalKind(str, Enum):
+    """The kinds of change a caretaker or family member can suggest."""
+
     ADD_MEDICATION = "add_medication"
     CHANGE_MEDICATION = "change_medication"
     STOP_MEDICATION = "stop_medication"
@@ -91,6 +97,8 @@ class AdviceSource(str, Enum):
 
 
 class ProposalStatus(str, Enum):
+    """Where a suggested change stands."""
+
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -98,6 +106,8 @@ class ProposalStatus(str, Enum):
 
 
 class NotificationKind(str, Enum):
+    """Why an email is being sent."""
+
     DOSE_REMINDER = "dose_reminder"
     DOSE_ESCALATION_CARETAKER = "dose_escalation_caretaker"
     DOSE_ESCALATION_FAMILY = "dose_escalation_family"
@@ -106,8 +116,10 @@ class NotificationKind(str, Enum):
 
 
 class NotificationStatus(str, Enum):
-    """Delivery state of one email. Nothing is marked SENT unless the mail
-    server accepted the message."""
+    """Delivery state of one email.
+
+    Nothing is marked SENT unless the mail server accepted the message.
+    """
 
     PENDING = "pending"
     SENT = "sent"
@@ -151,6 +163,8 @@ class Circle:
 
 @dataclass(frozen=True)
 class Member:
+    """A person in a care circle, with their role and sign-in state."""
+
     id: str
     circle_id: str
     display_name: str
@@ -164,13 +178,16 @@ class Member:
 
     @property
     def name_key(self) -> str:
+        """The member's name normalised for case- and space-insensitive matching."""
         return normalise_name(self.display_name)
 
 
 @dataclass(frozen=True)
 class MedicationDetails:
-    """Fields a person enters about a medicine. CareLoop stores the dosage
-    exactly as entered and never calculates or changes it."""
+    """Fields a person enters about a medicine.
+
+    CareLoop stores the dosage exactly as entered and never calculates or changes it.
+    """
 
     name: str
     dosage: str
@@ -180,6 +197,7 @@ class MedicationDetails:
     end_date: date | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to plain JSON-friendly values (for proposals and the audit log)."""
         return {
             "name": self.name,
             "dosage": self.dosage,
@@ -191,6 +209,7 @@ class MedicationDetails:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MedicationDetails:
+        """Rebuild details from `to_dict` output."""
         return cls(
             name=data["name"],
             dosage=data["dosage"],
@@ -203,6 +222,8 @@ class MedicationDetails:
 
 @dataclass(frozen=True)
 class Medication:
+    """A medication in the elder's plan, versioned for safe concurrent edits."""
+
     id: str
     circle_id: str
     details: MedicationDetails
@@ -212,11 +233,14 @@ class Medication:
     updated_at: datetime
 
     def to_audit_dict(self) -> dict[str, Any]:
+        """Snapshot used as the before/after value in the audit log."""
         return {**self.details.to_dict(), "status": self.status.value, "version": self.version}
 
 
 @dataclass(frozen=True)
 class AppointmentDetails:
+    """Fields a person enters about a doctor's appointment."""
+
     doctor_name: str
     purpose: str
     location: str
@@ -224,6 +248,7 @@ class AppointmentDetails:
     notes: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to plain JSON-friendly values (for proposals and the audit log)."""
         return {
             "doctor_name": self.doctor_name,
             "purpose": self.purpose,
@@ -234,6 +259,7 @@ class AppointmentDetails:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AppointmentDetails:
+        """Rebuild details from `to_dict` output."""
         return cls(
             doctor_name=data["doctor_name"],
             purpose=data["purpose"],
@@ -245,6 +271,8 @@ class AppointmentDetails:
 
 @dataclass(frozen=True)
 class Appointment:
+    """A doctor's appointment, versioned for safe concurrent edits."""
+
     id: str
     circle_id: str
     details: AppointmentDetails
@@ -254,13 +282,16 @@ class Appointment:
     updated_at: datetime
 
     def to_audit_dict(self) -> dict[str, Any]:
+        """Snapshot used as the before/after value in the audit log."""
         return {**self.details.to_dict(), "status": self.status.value, "version": self.version}
 
 
 @dataclass(frozen=True)
 class Dose:
-    """One scheduled dose of one medication. Every dose has its own record so
-    it can be followed until it is resolved."""
+    """One scheduled dose of one medication.
+
+    Every dose has its own record so it can be followed until it is resolved.
+    """
 
     id: str
     circle_id: str
@@ -285,8 +316,10 @@ class Advice:
 
 @dataclass(frozen=True)
 class Proposal:
-    """A suggested change from a caretaker or family member. It changes
-    nothing until the elder approves it."""
+    """A suggested change from a caretaker or family member.
+
+    It changes nothing until the elder approves it.
+    """
 
     id: str
     circle_id: str
@@ -306,6 +339,7 @@ class Proposal:
     advice: Advice = field(default_factory=lambda: Advice(AdviceSource.CARE_TEAM))
 
     def payload_dict(self) -> dict[str, Any]:
+        """The proposed details as plain values (empty for stop/cancel)."""
         if self.medication_details is not None:
             return self.medication_details.to_dict()
         if self.appointment_details is not None:
@@ -315,8 +349,11 @@ class Proposal:
 
 @dataclass(frozen=True)
 class Notification:
-    """One email to one person. The id is derived from (kind, ref_key,
-    recipient) so the same notification can never be queued twice."""
+    """One email to one person.
+
+    The id is derived from (kind, ref_key, recipient) so the same notification can never be queued
+    twice.
+    """
 
     id: str
     circle_id: str
@@ -338,8 +375,10 @@ SYSTEM_ACTOR_ROLE = "system"
 
 @dataclass(frozen=True)
 class AuditEvent:
-    """Append-only record of something that happened. Written by the backend
-    only; there is no code path to edit or delete one."""
+    """Append-only record of something that happened.
+
+    Written by the backend only; there is no code path to edit or delete one.
+    """
 
     circle_id: str
     actor_member_id: str | None  # None means the CareLoop scheduler
@@ -355,8 +394,7 @@ class AuditEvent:
 
 @dataclass
 class ChangeSet:
-    """Everything one user action changes, applied by the repository in a
-    single transaction.
+    """Everything one user action changes, applied by the repository in a single transaction.
 
     Optimistic concurrency: each medication/appointment/proposal update carries
     the version or status the caller read. If the stored record no longer
@@ -376,6 +414,6 @@ def normalise_name(name: str) -> str:
     return " ".join(name.split()).casefold()
 
 
-def bump(entity: Medication | Appointment, **changes: Any) -> Any:
-    """Return a copy of a versioned entity with its version incremented."""
-    return replace(entity, version=entity.version + 1, **changes)
+def next_version(entity: Medication | Appointment) -> int:
+    """Version number an edited copy of ``entity`` must carry (optimistic concurrency)."""
+    return entity.version + 1

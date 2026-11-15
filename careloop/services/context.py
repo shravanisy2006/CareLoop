@@ -14,6 +14,8 @@ from careloop.storage.repository import Repository
 
 @dataclass
 class ServiceContext:
+    """Storage, time, settings and email shared by every service."""
+
     repo: Repository
     clock: Clock
     settings: Settings

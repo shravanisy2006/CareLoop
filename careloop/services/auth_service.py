@@ -20,10 +20,13 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 
 
 class AuthService:
+    """Signs members in with circle code, name and passcode."""
+
     def __init__(self, ctx: ServiceContext) -> None:
         self._ctx = ctx
 
     def sign_in(self, circle_code: str, display_name: str, passcode: str) -> Member:
+        """Return the member if the details match; raise AuthenticationFailed or AccountLocked."""
         repo, now = self._ctx.repo, self._ctx.clock.now()
         try:
             code = validate_circle_code(circle_code)
@@ -55,8 +58,10 @@ class AuthService:
         return member
 
     def current_member(self, member_id: str | None, circle_id: str | None) -> Member | None:
-        """Re-load the signed-in member on every request, so removing someone
-        from the circle takes effect immediately."""
+        """Re-load the signed-in member from storage on every request.
+
+        Removing someone from the circle therefore takes effect immediately.
+        """
         if not member_id or not circle_id:
             return None
         member = self._ctx.repo.get_member(member_id)

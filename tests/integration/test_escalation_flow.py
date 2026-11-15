@@ -9,8 +9,7 @@ from tests.conftest import medication_details
 
 def _setup_dose(services, circle):
     services.records.add_medication(circle.elder, medication_details())
-    dose = services.doses.today(circle.elder, services.circles.get_circle(circle.elder))[0].dose
-    return dose
+    return services.doses.today(circle.elder, services.circles.get_circle(circle.elder))[0].dose
 
 
 def test_escalation_climbs_elder_then_caretaker_then_family(services, circle, clock, sender):

@@ -1,11 +1,15 @@
-"""Medicines. The elder changes them directly; anyone else's change becomes a
-proposal that changes nothing until it is approved."""
+"""Medicines.
+
+The elder changes them directly; anyone else's change becomes a proposal that changes nothing until
+it is approved.
+"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.domain.errors import ValidationFailed
 from careloop.domain.models import Medication, ProposalKind, ProposalStatus
@@ -28,7 +32,7 @@ def _form_page(
     errors: dict[str, str] | None = None,
     medication: Medication | None = None,
     status_code: int = 200,
-):
+) -> Response:
     return render(
         request,
         "medications/form.html",
@@ -42,7 +46,8 @@ def list_medications(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show all medicines in the circle."""
     medications = services.records.list_medications(viewer.member)
     return render(request, "medications/list.html", {"viewer": viewer, "medications": medications})
 
@@ -52,7 +57,8 @@ def new_medication(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show the form to add (or suggest) a medicine."""
     today = local_today(services, viewer).isoformat()
     return _form_page(request, viewer, values={"start_date": today, "advice_source": "doctor"})
 
@@ -62,7 +68,8 @@ async def create_medication(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Add a medicine (elder) or send it as a suggestion (helpers)."""
     form = await verified_form(request)
     try:
         if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):
@@ -90,7 +97,8 @@ def medication_detail(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show one medicine and any pending suggestions about it."""
     medication = services.records.get_medication(viewer.member, medication_id)
     pending = [
         p
@@ -116,7 +124,8 @@ def edit_medication_page(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Show the form to change (or suggest changing) a medicine."""
     medication = services.records.get_medication(viewer.member, medication_id)
     values = {**medication_to_values(medication), "advice_source": "doctor"}
     return _form_page(request, viewer, values=values, medication=medication)
@@ -128,7 +137,8 @@ async def edit_medication(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Change a medicine (elder) or send the change as a suggestion."""
     form = await verified_form(request)
     medication = services.records.get_medication(viewer.member, medication_id)
     try:
@@ -163,7 +173,8 @@ async def stop_medication(
     request: Request,
     services: Services = Depends(get_services),
     viewer: Viewer = Depends(get_viewer),
-):
+) -> Response:
+    """Stop a medicine (elder) or suggest stopping it."""
     form = await verified_form(request)
     medication = services.records.get_medication(viewer.member, medication_id)
     if can(viewer.member, Action.EDIT_RECORDS_DIRECTLY):

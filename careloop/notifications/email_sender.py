@@ -31,24 +31,31 @@ class EmailDeliveryError(Exception):
 
 @dataclass(frozen=True)
 class OutgoingEmail:
+    """A plain-text email ready to send."""
+
     to: str
     subject: str
     body: str
 
 
 class EmailSender(Protocol):
+    """Anything that can deliver an OutgoingEmail."""
+
     def send(self, message: OutgoingEmail) -> None:
         """Return only if the server accepted the message; otherwise raise."""
         ...
 
 
 class GmailSmtpSender:
+    """Sends mail through smtp.gmail.com with a Google App Password."""
+
     def __init__(self, address: str, app_password: str, timeout_seconds: float = 20.0) -> None:
         self._address = address
         self._app_password = app_password
         self._timeout = timeout_seconds
 
     def send(self, message: OutgoingEmail) -> None:
+        """Send one message over implicit TLS; raise EmailDeliveryError on any failure."""
         email = EmailMessage()
         email["From"] = f"CareLoop <{self._address}>"
         email["To"] = message.to
@@ -69,11 +76,15 @@ class GmailSmtpSender:
 
 
 class UnconfiguredSender:
-    def send(self, message: OutgoingEmail) -> None:
+    """Used when no Gmail credentials are set; never pretends to send."""
+
+    def send(self, message: OutgoingEmail) -> None:  # noqa: ARG002 - EmailSender signature
+        """Always raise EmailNotConfigured."""
         raise EmailNotConfigured("CARELOOP_GMAIL_ADDRESS / CARELOOP_GMAIL_APP_PASSWORD not set")
 
 
 def build_email_sender(address: str | None, app_password: str | None) -> EmailSender:
+    """Return a Gmail sender if both credentials are set, else an UnconfiguredSender."""
     if address and app_password:
         return GmailSmtpSender(address, app_password)
     logger.warning("Email is not configured; notifications will be recorded as not_configured.")

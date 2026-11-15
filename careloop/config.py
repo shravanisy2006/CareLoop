@@ -13,20 +13,25 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+#: Session cookies are signed with this key; shorter keys are too guessable.
+MIN_SECRET_KEY_LENGTH = 32
+#: The care cycle never runs more often than this, to keep load predictable.
+MIN_CYCLE_SECONDS = 15
+
 
 def _load_dotenv(path: Path) -> None:
     """Minimal .env loader: KEY=VALUE lines, existing environment wins."""
     if not path.is_file():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-def _flag(name: str, default: bool) -> bool:
+def _flag(name: str, *, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None or raw == "":
         return default
@@ -35,6 +40,8 @@ def _flag(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
+    """All runtime settings, loaded once from the environment."""
+
     secret_key: str
     storage_backend: str  # "sqlite" or "firestore"
     sqlite_path: str
@@ -52,15 +59,17 @@ class Settings:
 
     @property
     def email_configured(self) -> bool:
+        """Whether both Gmail settings are present."""
         return bool(self.gmail_address and self.gmail_app_password)
 
 
 def load_settings(env_file: Path | None = Path(".env")) -> Settings:
+    """Build Settings from the environment, reading `env_file` first if it exists."""
     if env_file is not None:
         _load_dotenv(env_file)
 
     secret_key = os.environ.get("CARELOOP_SECRET_KEY", "")
-    if len(secret_key) < 32:
+    if len(secret_key) < MIN_SECRET_KEY_LENGTH:
         if os.environ.get("CARELOOP_ENV", "development") == "production":
             raise RuntimeError("CARELOOP_SECRET_KEY must be set to at least 32 characters.")
         logger.warning(
@@ -80,9 +89,9 @@ def load_settings(env_file: Path | None = Path(".env")) -> Settings:
         gmail_address=os.environ.get("CARELOOP_GMAIL_ADDRESS") or None,
         gmail_app_password=os.environ.get("CARELOOP_GMAIL_APP_PASSWORD") or None,
         public_url=os.environ.get("CARELOOP_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/"),
-        secure_cookies=_flag("CARELOOP_SECURE_COOKIES", False),
-        scheduler_enabled=_flag("CARELOOP_SCHEDULER_ENABLED", True),
-        cycle_seconds=max(15, int(os.environ.get("CARELOOP_CYCLE_SECONDS", "60"))),
+        secure_cookies=_flag("CARELOOP_SECURE_COOKIES", default=False),
+        scheduler_enabled=_flag("CARELOOP_SCHEDULER_ENABLED", default=True),
+        cycle_seconds=max(MIN_CYCLE_SECONDS, int(os.environ.get("CARELOOP_CYCLE_SECONDS", "60"))),
         default_timezone=os.environ.get("CARELOOP_DEFAULT_TIMEZONE", "Asia/Kolkata"),
-        demo_mode=_flag("CARELOOP_DEMO_MODE", False),
+        demo_mode=_flag("CARELOOP_DEMO_MODE", default=False),
     )

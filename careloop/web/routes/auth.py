@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.domain.errors import AccountLocked, AuthenticationFailed, ValidationFailed
 from careloop.services.container import Services
@@ -28,14 +29,16 @@ TIMEZONE_CHOICES = (
 
 
 @router.get("/login")
-def login_page(request: Request):
+def login_page(request: Request) -> Response:
+    """Show the sign-in form (or go home if already signed in)."""
     if request.session.get(SESSION_MEMBER):
         return RedirectResponse("/", status_code=303)
     return render(request, "auth/login.html", {"values": {}})
 
 
 @router.post("/login")
-async def login(request: Request, services: Services = Depends(get_services)):
+async def login(request: Request, services: Services = Depends(get_services)) -> Response:
+    """Sign in with circle code, name and passcode."""
     form = await verified_form(request)
     values = form_values(form)
     try:
@@ -58,14 +61,16 @@ async def login(request: Request, services: Services = Depends(get_services)):
 
 
 @router.post("/logout")
-async def logout(request: Request):
+async def logout(request: Request) -> Response:
+    """End the session."""
     await verified_form(request)
     sign_out(request)
     return RedirectResponse("/login", status_code=303)
 
 
 @router.get("/start")
-def start_page(request: Request, services: Services = Depends(get_services)):
+def start_page(request: Request, services: Services = Depends(get_services)) -> Response:
+    """Show the form to start a new care circle."""
     return render(
         request,
         "auth/start.html",
@@ -78,7 +83,8 @@ def start_page(request: Request, services: Services = Depends(get_services)):
 
 
 @router.post("/start")
-async def start(request: Request, services: Services = Depends(get_services)):
+async def start(request: Request, services: Services = Depends(get_services)) -> Response:
+    """Create a care circle with the elder as its first member, and sign them in."""
     form = await verified_form(request)
     values = form_values(form)
     try:
@@ -104,7 +110,8 @@ async def start(request: Request, services: Services = Depends(get_services)):
 
 
 @router.get("/welcome")
-def welcome(request: Request):
+def welcome(request: Request) -> Response:
+    """Show the new circle's code once, right after it is created."""
     code = request.session.pop("new_circle_code", None)
     if not code:
         return RedirectResponse("/", status_code=303)

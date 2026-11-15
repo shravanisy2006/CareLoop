@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import date, datetime
-from typing import Any
 
 from starlette.datastructures import FormData
 
-from careloop.domain.errors import ValidationFailed
 from careloop.domain.models import (
     Advice,
     Appointment,
@@ -32,6 +29,7 @@ def form_values(form: FormData) -> dict[str, str]:
 
 
 def medication_from_form(form: FormData) -> MedicationDetails:
+    """Validate a submitted medication form."""
     return validate_medication_input(
         name=str(form.get("name", "")),
         dosage=str(form.get("dosage", "")),
@@ -43,20 +41,20 @@ def medication_from_form(form: FormData) -> MedicationDetails:
 
 
 def medication_to_values(medication: Medication) -> dict[str, str]:
+    """Pre-fill the medication form from an existing medication."""
     d = medication.details
-    values = {
+    return {
         "name": d.name,
         "dosage": d.dosage,
         "instructions": d.instructions,
         "start_date": d.start_date.isoformat(),
         "end_date": d.end_date.isoformat() if d.end_date else "",
+        **dict(zip(TIME_FIELDS, d.times, strict=False)),
     }
-    for field, value in zip(TIME_FIELDS, d.times, strict=False):
-        values[field] = value
-    return values
 
 
 def appointment_from_form(form: FormData, tz_name: str, now: datetime) -> AppointmentDetails:
+    """Validate a submitted appointment form (local date and time)."""
     return validate_appointment_input(
         doctor_name=str(form.get("doctor_name", "")),
         purpose=str(form.get("purpose", "")),
@@ -70,6 +68,7 @@ def appointment_from_form(form: FormData, tz_name: str, now: datetime) -> Appoin
 
 
 def appointment_to_values(appointment: Appointment, tz_name: str) -> dict[str, str]:
+    """Pre-fill the appointment form in the circle's local time."""
     d = appointment.details
     return {
         "doctor_name": d.doctor_name,
@@ -89,18 +88,3 @@ def advice_from_form(form: FormData, today: date) -> Advice:
         str(form.get("advised_on", "")),
         today=today,
     )
-
-
-def collect_errors(*checks: Callable[[], Any]) -> list[Any]:
-    """Run every validator and return their results, or raise one
-    ValidationFailed listing every field error at once."""
-    errors: dict[str, str] = {}
-    results: list[Any] = []
-    for check in checks:
-        try:
-            results.append(check())
-        except ValidationFailed as exc:
-            errors.update(exc.field_errors)
-    if errors:
-        raise ValidationFailed(errors)
-    return results

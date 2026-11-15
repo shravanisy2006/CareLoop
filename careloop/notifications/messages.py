@@ -42,6 +42,7 @@ def notification_id(kind: NotificationKind, ref_key: str, recipient_id: str) -> 
 
 
 def local_time_label(moment: datetime, tz_name: str) -> str:
+    """Format a moment in the circle's timezone, e.g. "Sun 15 Nov, 08:00 AM"."""
     return moment.astimezone(ZoneInfo(tz_name)).strftime("%a %d %b, %I:%M %p")
 
 
@@ -79,6 +80,7 @@ def dose_notifications(
     public_url: str,
     now: datetime,
 ) -> list[Notification]:
+    """Emails for one dose reaching `level`: a reminder or an unconfirmed-dose alert."""
     kind = notification_kind_for_level(level)
     when = local_time_label(dose.scheduled_for, circle.timezone)
     name = medication.details.name
@@ -108,6 +110,7 @@ def dose_notifications(
 def appointment_notifications(
     circle: Circle, appointment: Appointment, members: list[Member], public_url: str, now: datetime
 ) -> list[Notification]:
+    """Reminder emails for an upcoming appointment, one per active member."""
     d = appointment.details
     when = local_time_label(d.starts_at, circle.timezone)
     # Including the start time in the key means a rescheduled visit gets a new reminder.
@@ -143,8 +146,10 @@ def proposal_notifications(
     public_url: str,
     now: datetime,
 ) -> list[Notification]:
-    """Tell the elder (and the elder's trusted decision-maker, if any) that a
-    change is waiting. `summary` is the plain-language description."""
+    """Tell the elder (and the elder's trusted decision-maker, if any) that a change is waiting.
+
+    `summary` is the plain-language description.
+    """
     result = []
     for person in deciders:
         if person.role is Role.ELDER:

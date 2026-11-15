@@ -68,20 +68,24 @@ NOTIFICATION_STATUS_LABELS = {
 
 
 def local_datetime(value: datetime | None, tz_name: str, fmt: str = "%a %d %b %Y, %I:%M %p") -> str:
+    """Template filter: format a UTC moment in the circle's timezone."""
     if value is None:
         return ""
     return value.astimezone(ZoneInfo(tz_name)).strftime(fmt).replace(" 0", " ")
 
 
 def local_time(value: datetime, tz_name: str) -> str:
+    """Template filter: format a UTC moment as a local clock time, e.g. 8:00 AM."""
     return value.astimezone(ZoneInfo(tz_name)).strftime("%I:%M %p").lstrip("0")
 
 
 def demo_mode(request: Request) -> bool:
+    """Whether the public demo mode is on (shows the demo banner and panel)."""
     return bool(request.app.state.settings.demo_mode)
 
 
 def build_templates() -> Jinja2Templates:
+    """Create the Jinja environment with CareLoop's filters and globals."""
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))  # autoescape is on for .html
     env = templates.env
     env.filters["local_datetime"] = local_datetime
@@ -115,16 +119,20 @@ def build_templates() -> Jinja2Templates:
 
 
 def flash(request: Request, message: str, kind: str = "success") -> None:
+    """Queue a message to show on the next page."""
     request.session.setdefault("flash", []).append({"kind": kind, "text": message})
 
 
 def pop_flashes(request: Request) -> list[dict[str, str]]:
-    return request.session.pop("flash", [])
+    """Return and clear the messages queued for the next page."""
+    messages: list[dict[str, str]] = request.session.pop("flash", [])
+    return messages
 
 
 def render(
     request: Request, template: str, context: dict[str, Any] | None = None, status_code: int = 200
 ) -> HTMLResponse:
+    """Render a template with the queued flash messages."""
     templates: Jinja2Templates = request.app.state.templates
     data = {"flashes": pop_flashes(request), **(context or {})}
     return templates.TemplateResponse(request, template, data, status_code=status_code)

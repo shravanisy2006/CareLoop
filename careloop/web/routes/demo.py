@@ -1,11 +1,14 @@
-"""One-click demo sign-in. Only mounted when CARELOOP_DEMO_MODE=true, so it does
-not exist at all in a real deployment."""
+"""One-click demo sign-in.
+
+Only mounted when CARELOOP_DEMO_MODE=true, so it does not exist at all in a real deployment.
+"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from starlette.requests import Request
+from starlette.responses import Response
 
 from careloop.demo import DEMO_CIRCLE_CODE, demo_person
 from careloop.domain.errors import NotFound
@@ -18,7 +21,8 @@ router = APIRouter()
 
 
 @router.post("/demo/sign-in")
-async def demo_sign_in(request: Request, services: Services = Depends(get_services)):
+async def demo_sign_in(request: Request, services: Services = Depends(get_services)) -> Response:
+    """Sign in as one of the public demo people."""
     form = await verified_form(request)
     person = demo_person(str(form.get("role", "")))
     if person is None:

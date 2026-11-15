@@ -28,18 +28,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from datetime import datetime, timezone  # noqa: E402
+from datetime import datetime, timezone
 
-import uvicorn  # noqa: E402
-from playwright.sync_api import sync_playwright  # noqa: E402
+import uvicorn
+from playwright.sync_api import sync_playwright
 
-from careloop.clock import FixedClock  # noqa: E402
-from careloop.domain.models import Advice, AdviceSource, ProposalKind  # noqa: E402
-from careloop.domain.validation import validate_medication_input  # noqa: E402
-from careloop.notifications.email_sender import UnconfiguredSender  # noqa: E402
-from careloop.services.container import build_services  # noqa: E402
-from careloop.web.app import create_app  # noqa: E402
-from tests.conftest import make_settings  # noqa: E402
+from careloop.clock import FixedClock
+from careloop.domain.models import Advice, AdviceSource, ProposalKind
+from careloop.domain.validation import validate_medication_input
+from careloop.notifications.email_sender import UnconfiguredSender
+from careloop.services.container import Services, build_services
+from careloop.web.app import create_app
+from tests.conftest import make_settings
 
 PEOPLE = [
     ("elder", "Asha Rao", "demo-elder-2468"),
@@ -67,7 +67,7 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def seed(services) -> tuple[str, str]:
+def seed(services: Services) -> tuple[str, str]:
     now = services.ctx.clock.now()
     today = now.date().isoformat()
     circle, elder = services.circles.create_circle(
